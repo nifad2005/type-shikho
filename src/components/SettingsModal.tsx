@@ -76,7 +76,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
     unlockAudioContext();
     setIsTestingVoice(true);
-    testVoicePlayback(language, () => {
+    testVoicePlayback('bn', () => {
       setIsTestingVoice(false);
     });
   };
@@ -226,22 +226,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* 3. Voice Instructor */}
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <span className="font-medium text-slate-700 dark:text-slate-300">
-                {isBn ? 'ভয়েস গাইড' : 'Voice Guide'}
+                {isBn ? 'বাংলা ভয়েস গাইড' : 'Bangla Voice Guide'}
               </span>
               {voiceEnabled && (
                 <button
-                  id="btn-test-voice-mini"
+                  id="btn-test-voice-action"
                   onClick={handleTestVoice}
-                  title={isBn ? 'টেস্ট করুন' : 'Test Audio'}
-                  className={`p-1 rounded-md text-xs transition-all cursor-pointer ${
+                  className={`px-2 py-0.5 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer ${
                     isTestingVoice
-                      ? 'text-amber-500 animate-pulse bg-amber-500/10'
-                      : 'text-slate-400 hover:text-teal-500 hover:bg-slate-100 dark:hover:bg-slate-800'
+                      ? 'bg-teal-500/20 text-teal-400 border border-teal-500/40 animate-pulse'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-teal-500 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                   }`}
                 >
-                  <Volume2 className="w-3.5 h-3.5" />
+                  <Volume2 className="w-3 h-3 text-teal-500" />
+                  <span>{isTestingVoice ? (isBn ? 'বাজছে...' : 'Playing...') : (isBn ? 'টেস্ট শুনুন' : 'Test Audio')}</span>
                 </button>
               )}
             </div>

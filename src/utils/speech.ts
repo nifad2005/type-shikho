@@ -1,9 +1,8 @@
 /**
- * High-Performance Bengali & English Voice Instructor Engine
- * Robust Multi-Tier Architecture:
- * Tier 1: Direct Cloud TTS Stream (Google Public TTS / API - works 100% on Vercel, Netlify, localhost)
- * Tier 2: Native Web Speech Synthesis (works offline on any browser/device)
- * Tier 3: Web Audio Synth Feedback Chimes
+ * High-Performance Bengali Voice Instructor Engine
+ * Specifically tuned for Bengali (বাংলা) language learning:
+ * Tier 1: Server Audio TTS Stream (/api/tts proxy - works seamlessly on Cloud Run & Vercel Serverless)
+ * Tier 2: Native Web Speech Synthesis (bn-BD / bn-IN browser engine for offline / static hosting)
  */
 
 import { Lesson, Language, UserStats } from '../types';
@@ -15,7 +14,7 @@ let isCurrentlySpeaking = false;
 let currentSpokenText = '';
 let speechListeners: Array<(speaking: boolean, text: string) => void> = [];
 
-// Audio Blob Cache for 0ms instantaneous replays
+// Audio Blob Object URL Cache for instantaneous 0ms replays
 const blobCache = new Map<string, string>();
 const activeFetches = new Map<string, Promise<string | null>>();
 
@@ -61,7 +60,7 @@ function getSharedAudio(): HTMLAudioElement {
     });
 
     sharedAudio.addEventListener('error', (e) => {
-      console.warn('Audio element error, falling back to Web Speech:', e);
+      console.warn('HTML Audio playback error, falling back to Web Speech:', e);
       if (isCurrentlySpeaking && currentSpokenText) {
         speakViaWebSpeech(currentSpokenText, 'bn');
       } else {
@@ -153,21 +152,13 @@ export function stopSpeaking() {
 }
 
 /**
- * Generates direct client TTS stream URL (universally accessible)
+ * Prefetches audio chunk from /api/tts proxy into a local blob URL
  */
-export function getDirectTTSUrl(text: string, lang: Language): string {
-  const targetLang = lang === 'bn' ? 'bn' : 'en';
-  return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${targetLang}&q=${encodeURIComponent(text.trim())}`;
-}
-
-/**
- * Prefetches and caches audio for a given sentence to ensure instant playback
- */
-export async function prefetchAudioChunk(text: string, lang: Language): Promise<string | null> {
+export async function prefetchAudioChunk(text: string, lang: Language = 'bn'): Promise<string | null> {
   const clean = text.trim();
   if (!clean || typeof window === 'undefined') return null;
 
-  const cacheKey = `${lang}:${clean}`;
+  const cacheKey = `bn:${clean}`;
   if (blobCache.has(cacheKey)) {
     return blobCache.get(cacheKey)!;
   }
@@ -178,15 +169,22 @@ export async function prefetchAudioChunk(text: string, lang: Language): Promise<
 
   const fetchPromise = (async () => {
     try {
-      // 1. Try direct public TTS stream
-      const streamUrl = getDirectTTSUrl(clean, lang);
-      blobCache.set(cacheKey, streamUrl);
-      activeFetches.delete(cacheKey);
-      return streamUrl;
-    } catch {
-      activeFetches.delete(cacheKey);
-      return null;
+      const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=bn`;
+      const res = await fetch(url);
+      const contentType = res.headers.get('content-type') || '';
+
+      if (res.ok && contentType.includes('audio')) {
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        blobCache.set(cacheKey, objectUrl);
+        activeFetches.delete(cacheKey);
+        return objectUrl;
+      }
+    } catch (err) {
+      console.warn('TTS fetch failed, will fallback to browser speech:', err);
     }
+    activeFetches.delete(cacheKey);
+    return null;
   })();
 
   activeFetches.set(cacheKey, fetchPromise);
@@ -196,62 +194,53 @@ export async function prefetchAudioChunk(text: string, lang: Language): Promise<
 /**
  * Preloads all audio for a given lesson ahead of time
  */
-export function preloadLessonAudio(lesson: Lesson | null, lang: Language) {
+export function preloadLessonAudio(lesson: Lesson | null, lang: Language = 'bn') {
   if (!lesson) return;
   loadVoices();
-  const guide = getLessonSpokenGuide(lesson, lang);
+  const guide = getLessonSpokenGuide(lesson, 'bn');
   if (guide) {
-    prefetchAudioChunk(guide, lang);
+    prefetchAudioChunk(guide, 'bn');
   }
 }
 
 /**
- * Finds the best available browser speech synthesis voice for a language
+ * Finds the best available browser speech synthesis voice for Bengali
  */
-function findBestVoice(lang: Language): SpeechSynthesisVoice | null {
+function findBestBengaliVoice(): SpeechSynthesisVoice | null {
   const voices = cachedVoices.length > 0 ? cachedVoices : loadVoices();
   if (!voices || voices.length === 0) return null;
 
-  if (lang === 'bn') {
-    // 1. Exact Bengali match
-    const bnExact = voices.find(
-      (v) =>
-        v.lang.toLowerCase() === 'bn-bd' ||
-        v.lang.toLowerCase() === 'bn-in' ||
-        v.lang.toLowerCase() === 'bn_bd' ||
-        v.lang.toLowerCase() === 'bn_in'
-    );
-    if (bnExact) return bnExact;
+  // 1. Exact match for bn-BD or bn-IN
+  const bnExact = voices.find(
+    (v) =>
+      v.lang.toLowerCase() === 'bn-bd' ||
+      v.lang.toLowerCase() === 'bn-in' ||
+      v.lang.toLowerCase() === 'bn_bd' ||
+      v.lang.toLowerCase() === 'bn_in'
+  );
+  if (bnExact) return bnExact;
 
-    // 2. Contains bn or bangla / bengali
-    const bnSub = voices.find(
-      (v) =>
-        v.lang.toLowerCase().startsWith('bn') ||
-        v.name.toLowerCase().includes('bangla') ||
-        v.name.toLowerCase().includes('bengali') ||
-        v.name.toLowerCase().includes('বাংলা')
-    );
-    if (bnSub) return bnSub;
+  // 2. Name contains Bengali / Bangla / বাংলা
+  const bnSub = voices.find(
+    (v) =>
+      v.lang.toLowerCase().startsWith('bn') ||
+      v.name.toLowerCase().includes('bangla') ||
+      v.name.toLowerCase().includes('bengali') ||
+      v.name.toLowerCase().includes('বাংলা')
+  );
+  if (bnSub) return bnSub;
 
-    // 3. Indian English / regional fallback
-    const inVoice = voices.find((v) => v.lang.toLowerCase().includes('in') || v.lang.toLowerCase().includes('en-in'));
-    if (inVoice) return inVoice;
-  } else {
-    // English
-    const enUs = voices.find((v) => v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en_us');
-    if (enUs) return enUs;
-
-    const enSub = voices.find((v) => v.lang.toLowerCase().startsWith('en'));
-    if (enSub) return enSub;
-  }
+  // 3. Indian regional voice fallback
+  const inVoice = voices.find((v) => v.lang.toLowerCase().includes('in') || v.lang.toLowerCase().includes('en-in'));
+  if (inVoice) return inVoice;
 
   return voices[0] || null;
 }
 
 /**
- * Native Browser Web Speech Synthesis Engine (100% client-side offline fallback)
+ * Native Browser Web Speech Synthesis Engine (100% offline fallback for Bengali)
  */
-export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => void) {
+export function speakViaWebSpeech(text: string, _lang: Language = 'bn', onEnd?: () => void) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
     notifySpeechState(false, '');
     if (onEnd) onEnd();
@@ -262,22 +251,15 @@ export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => vo
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text);
-    const bestVoice = findBestVoice(lang);
+    const bestVoice = findBestBengaliVoice();
 
     if (bestVoice) {
       utterance.voice = bestVoice;
     }
 
-    if (lang === 'bn') {
-      utterance.lang = bestVoice?.lang || 'bn-BD';
-      utterance.rate = 0.92;
-      utterance.pitch = 1.0;
-    } else {
-      utterance.lang = bestVoice?.lang || 'en-US';
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-    }
-
+    utterance.lang = bestVoice?.lang || 'bn-BD';
+    utterance.rate = 0.90;
+    utterance.pitch = 1.0;
     utterance.volume = 1.0;
 
     let hasEnded = false;
@@ -297,7 +279,7 @@ export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => vo
       finish();
     };
 
-    // Safety timeout in case browser drops speech onend event (Chromium edge cases)
+    // Safety timeout in case browser drops speech onend event
     const charCount = text.length;
     const estimatedDurationMs = Math.max(2500, (charCount / 8) * 1000 + 2000);
     const timeoutId = setTimeout(() => {
@@ -322,11 +304,11 @@ export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => vo
 }
 
 /**
- * Main Speak Function: Plays audio via HTML5 Audio with instant Web Speech fallback
+ * Main Bengali Voice Instructor Speak Function
  */
 export async function speakText(
   text: string,
-  lang: Language = 'bn',
+  _lang: Language = 'bn',
   enabled = true,
   onEnd?: () => void
 ) {
@@ -339,65 +321,69 @@ export async function speakText(
   unlockAudioContext();
   const cleanText = text.trim();
 
-  // Try direct Audio Stream
-  try {
-    const streamUrl = getDirectTTSUrl(cleanText, lang);
+  const cacheKey = `bn:${cleanText}`;
+  let audioUrl = blobCache.get(cacheKey);
+
+  if (!audioUrl && activeFetches.has(cacheKey)) {
+    audioUrl = (await activeFetches.get(cacheKey)) || undefined;
+  }
+
+  if (!audioUrl) {
+    audioUrl = (await prefetchAudioChunk(cleanText, 'bn')) || undefined;
+  }
+
+  // If server TTS audio is available, play via HTML5 Audio
+  if (audioUrl) {
     const audio = getSharedAudio();
     notifySpeechState(true, cleanText);
 
-    audio.src = streamUrl;
+    try {
+      audio.src = audioUrl;
 
-    const handleEnded = () => {
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-      notifySpeechState(false, '');
-      if (onEnd) onEnd();
-    };
+      const handleEnded = () => {
+        audio.removeEventListener('ended', handleEnded);
+        notifySpeechState(false, '');
+        if (onEnd) onEnd();
+      };
+      audio.addEventListener('ended', handleEnded, { once: true });
 
-    const handleError = () => {
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
-      // Seamlessly fallback to browser Web Speech API
-      speakViaWebSpeech(cleanText, lang, onEnd);
-    };
-
-    audio.addEventListener('ended', handleEnded, { once: true });
-    audio.addEventListener('error', handleError, { once: true });
-
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch(() => {
-        // Autoplay policy or format fallback
-        speakViaWebSpeech(cleanText, lang, onEnd);
-      });
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('HTML Audio play error, fallback to Web Speech:', err);
+          speakViaWebSpeech(cleanText, 'bn', onEnd);
+        });
+      }
+      return;
+    } catch (err) {
+      console.warn('HTML Audio execution failed, fallback to Web Speech:', err);
+      speakViaWebSpeech(cleanText, 'bn', onEnd);
+      return;
     }
-  } catch {
-    speakViaWebSpeech(cleanText, lang, onEnd);
   }
+
+  // Fallback: Browser Web Speech API
+  speakViaWebSpeech(cleanText, 'bn', onEnd);
 }
 
 /**
- * Test Voice Audio Playback for Settings / Diagnostics
+ * Test Voice Audio Playback for Settings / Diagnostics (Pure Bengali)
  */
-export function testVoicePlayback(lang: Language = 'bn', onEnd?: () => void) {
-  const sampleText =
-    lang === 'bn'
-      ? 'টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! আপনার ভয়েস গাইড সফলভাবে চালু রয়েছে।'
-      : 'Welcome to Type Shikho! Your audio voice guidance is fully active and working.';
-  speakText(sampleText, lang, true, onEnd);
+export function testVoicePlayback(_lang: Language = 'bn', onEnd?: () => void) {
+  const sampleText = 'টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! আপনার বাংলা ভয়েস গাইড সফলভাবে চালু রয়েছে।';
+  speakText(sampleText, 'bn', true, onEnd);
 }
 
 /**
  * Returns available voice engine information
  */
-export function getSpeechEngineInfo(lang: Language = 'bn'): {
+export function getSpeechEngineInfo(): {
   engineType: string;
   voiceName: string;
   isBengaliNative: boolean;
 } {
-  const bestVoice = findBestVoice(lang);
+  const bestVoice = findBestBengaliVoice();
   const isBengali =
-    lang === 'bn' &&
     bestVoice &&
     (bestVoice.lang.toLowerCase().includes('bn') ||
       bestVoice.name.toLowerCase().includes('bangla') ||
@@ -405,100 +391,70 @@ export function getSpeechEngineInfo(lang: Language = 'bn'): {
       bestVoice.name.toLowerCase().includes('বাংলা'));
 
   return {
-    engineType: 'Cloud Stream / Native Web Speech',
-    voiceName: bestVoice ? `${bestVoice.name} (${bestVoice.lang})` : (lang === 'bn' ? 'বাংলা ভয়েস ইঞ্জিন' : 'English Voice Engine'),
+    engineType: 'বাংলা অডিও সিন্থেসাইজার (Bangla Voice Stream)',
+    voiceName: bestVoice ? `${bestVoice.name} (${bestVoice.lang})` : 'বাংলা ন্যাচারাল ভয়েস',
     isBengaliNative: !!isBengali,
   };
 }
 
 /**
- * Step-by-step Bengali voice guide for all modules & lessons
+ * Step-by-step Bengali voice guide for all modules & lessons (100% Bangla)
  */
-export function getLessonSpokenGuide(lesson: Lesson, lang: Language): string {
-  const isBn = lang === 'bn';
-
+export function getLessonSpokenGuide(lesson: Lesson, _lang?: Language): string {
   if (lesson.type === 'game') {
-    return isBn
-      ? 'রিফ্লেক্স চ্যালেঞ্জ! উপরে পড়া অক্ষরগুলো মাটিতে পড়ার আগে দ্রুত কীবোর্ডে টাইপ করুন।'
-      : 'Reflex challenge! Type the falling letters before they hit the ground.';
+    return 'রিফ্লেক্স চ্যালেঞ্জ! উপরে পড়া অক্ষরগুলো মাটিতে পড়ার আগে দ্রুত কীবোর্ডে টাইপ করুন।';
   }
 
   // Module 1: Home Row
   if (lesson.id === 'm1-l1') {
-    return isBn
-      ? 'টাইপিংয়ের প্রথম পাঠে স্বাগতম! বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন। কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ করুন।'
-      : 'Welcome! Rest left index on F and right index on J. Feel the bumps and keep eyes on screen.';
+    return 'টাইপিংয়ের প্রথম পাঠে স্বাগতম! বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন। কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ করুন।';
   }
   if (lesson.id === 'm1-l2') {
-    return isBn
-      ? 'দ্বিতীয় পাঠ: বাম মধ্যমা ডি কি এবং ডান মধ্যমা কে কি-তে রাখুন।'
-      : 'Lesson 2: Rest left middle finger on D and right middle finger on K.';
+    return 'দ্বিতীয় পাঠ: বাম মধ্যমা ডি কি এবং ডান মধ্যমা কে কি-তে রাখুন।';
   }
   if (lesson.id === 'm1-l3') {
-    return isBn
-      ? 'তৃতীয় পাঠ: বাম অনামিকা এস কি এবং ডান অনামিকা এল কি-তে রাখুন।'
-      : 'Lesson 3: Place left ring finger on S and right ring finger on L.';
+    return 'তৃতীয় পাঠ: বাম অনামিকা এস কি এবং ডান অনামিকা এল কি-তে রাখুন।';
   }
   if (lesson.id === 'm1-l4') {
-    return isBn
-      ? 'চতুর্থ পাঠ: বাম কনিষ্ঠা এ কি এবং ডান কনিষ্ঠা দিয়ে সেমিকোলন কি টাইপ করুন।'
-      : 'Lesson 4: Left pinky on A, right pinky on semicolon.';
+    return 'চতুর্থ পাঠ: বাম কনিষ্ঠা এ কি এবং ডান কনিষ্ঠা দিয়ে সেমিকোলন কি টাইপ করুন।';
   }
   if (lesson.id === 'm1-l5' || lesson.id === 'm1-l6') {
-    return isBn
-      ? 'হোম রো কম্বিনেশন ড্রিল। বৃদ্ধাঙ্গুলি দিয়ে স্পেসবার চাপুন এবং স্বাভাবিক ছন্দ বজায় রাখুন।'
-      : 'Home row fluency drill. Tap the spacebar with your thumb in rhythm.';
+    return 'হোম রো কম্বিনেশন ড্রিল। বৃদ্ধাঙ্গুলি দিয়ে স্পেসবার চাপুন এবং স্বাভাবিক ছন্দ বজায় রাখুন।';
   }
 
   // Module 2: Top & Bottom Row
   if (lesson.id === 'm2-l1') {
-    return isBn
-      ? 'টপ রো স্পর্শ: ডি থেকে উপরে উঠে ই কি এবং কে থেকে উপরে উঠে আই কি টাইপ করুন।'
-      : 'Top row reach: Reach up from D to E with left middle finger, and from K to I with right middle finger.';
+    return 'টপ রো স্পর্শ: ডি থেকে উপরে উঠে ই কি এবং কে থেকে উপরে উঠে আই কি টাইপ করুন।';
   }
   if (lesson.id === 'm2-l2') {
-    return isBn
-      ? 'এফ থেকে তর্জনী উপরে তুলে আর কি, এবং জে থেকে উপরে তুলে ইউ কি টাইপ করুন।'
-      : 'Reach up from F to R with left index, and from J to U with right index.';
+    return 'এফ থেকে তর্জনী উপরে তুলে আর কি, এবং জে থেকে উপরে তুলে ইউ কি টাইপ করুন।';
   }
   if (lesson.id === 'm2-l3') {
-    return isBn
-      ? 'বাম তর্জনী দিয়ে টি কি এবং ডান তর্জনী দিয়ে ওয়াই কি টাইপ করুন।'
-      : 'Reach inwards to T with left index, and inwards to Y with right index.';
+    return 'বাম তর্জনী দিয়ে টি কি এবং ডান তর্জনী দিয়ে ওয়াই কি টাইপ করুন।';
   }
   if (lesson.id === 'm2-l4') {
-    return isBn
-      ? 'টপ রো শেষ অক্ষর: কিউ, ডব্লিউ, ও এবং পি অনুশীলন করুন।'
-      : 'Top row outer reach: Q, W, O, and P reach.';
+    return 'টপ রো শেষ অক্ষর: কিউ, ডব্লিউ, ও এবং পি অনুশীলন করুন।';
   }
   if (lesson.id === 'm2-l5' || lesson.id === 'm2-l6') {
-    return isBn
-      ? 'বটম রো অনুশীলন: আঙুল নিচে নামিয়ে শান্তভাবে টাইপ করুন।'
-      : 'Bottom row exploration: Smoothly reach down to bottom keys.';
+    return 'বটম রো অনুশীলন: আঙুল নিচে নামিয়ে শান্তভাবে টাইপ করুন।';
   }
 
   // Module 3: Shift & Capitals
   if (lesson.id.startsWith('m3-')) {
-    return isBn
-      ? 'বড় হাতের অক্ষরের জন্য বিপরীত হাতের কনিষ্ঠা দিয়ে শিফট চেপে ধরুন।'
-      : 'Shift key coordination: Use the opposite pinky to hold shift while striking the letter.';
+    return 'বড় হাতের অক্ষরের জন্য বিপরীত হাতের কনিষ্ঠা দিয়ে শিফট চেপে ধরুন।';
   }
 
   // Module 4: Numbers & Symbols
   if (lesson.id.startsWith('m4-')) {
-    return isBn
-      ? 'সংখ্যা রো: হোম রো থেকে সোজা উপরে আঙুল তুলে সংখ্যা টাইপ করুন।'
-      : 'Number row coordination: Reach straight up from home row to type numbers.';
+    return 'সংখ্যা রো: হোম রো থেকে সোজা উপরে আঙুল তুলে সংখ্যা টাইপ করুন।';
   }
 
   // Module 5: Mastery & Speed
   if (lesson.id.startsWith('m5-')) {
-    return isBn
-      ? 'মাস্টারি প্যারাগ্রাফ: গতি নয়, নির্ভুলতার সাথে সাবলীলভাবে টাইপ করুন।'
-      : 'Mastery paragraph: Focus on pure accuracy and consistent cadence.';
+    return 'মাস্টারি প্যারাগ্রাফ: গতি নয়, নির্ভুলতার সাথে সাবলীলভাবে টাইপ করুন।';
   }
 
-  return isBn ? lesson.descriptionBn : lesson.descriptionEn;
+  return lesson.descriptionBn || lesson.titleBn;
 }
 
 /**
@@ -507,10 +463,8 @@ export function getLessonSpokenGuide(lesson: Lesson, lang: Language): string {
 export function getExpertCoachTip(
   userStats: UserStats,
   lesson: Lesson,
-  language: Language
+  _language?: Language
 ): string {
-  const isBn = language === 'bn';
-
   const mistakes = (Object.entries(userStats.keyMistakes || {}) as [string, number][])
     .filter(([char, count]) => count > 0 && char.trim().length > 0)
     .sort((a, b) => b[1] - a[1]);
@@ -519,34 +473,22 @@ export function getExpertCoachTip(
 
   if (topMistakeKey) {
     if (topMistakeKey === 'f' || topMistakeKey === 'j') {
-      return isBn
-        ? `আপনার ${topMistakeKey.toUpperCase()} কি-তে ভুল হচ্ছে। খাঁজটি অনুভব করে তর্জনী স্থির রাখুন।`
-        : `Frequent errors on ${topMistakeKey.toUpperCase()}. Feel the tactile bump to anchor your index finger.`;
+      return `আপনার ${topMistakeKey.toUpperCase()} কি-তে ভুল হচ্ছে। খাঁজটি অনুভব করে তর্জনী স্থির রাখুন।`;
     }
     if (['e', 'i', 'r', 'u', 't', 'y', 'o', 'p', 'q', 'w'].includes(topMistakeKey)) {
-      return isBn
-        ? `টপ রো কি (${topMistakeKey.toUpperCase()}) টাইপ করার পর আঙুল হোম রো-তে ফিরিয়ে আনুন।`
-        : `After striking top row key (${topMistakeKey.toUpperCase()}), immediately return your finger to home row.`;
+      return `টপ রো কি (${topMistakeKey.toUpperCase()}) টাইপ করার পর আঙুল হোম রো-তে ফিরিয়ে আনুন।`;
     }
     if (['z', 'x', 'c', 'v', 'b', 'n', 'm'].includes(topMistakeKey)) {
-      return isBn
-        ? `বটম রো কি (${topMistakeKey.toUpperCase()}) টাইপের সময় কব্জি সোজা রাখুন।`
-        : `Keep wrists straight and floating gently when reaching for bottom row key (${topMistakeKey.toUpperCase()}).`;
+      return `বটম রো কি (${topMistakeKey.toUpperCase()}) টাইপের সময় কব্জি সোজা রাখুন।`;
     }
     if (topMistakeKey === 'a' || topMistakeKey === ';') {
-      return isBn
-        ? `কনিষ্ঠা কি (${topMistakeKey.toUpperCase()}) টাইপ করার সময় পুরো হাত না নাড়িয়ে শুধু কনিষ্ঠা ব্যবহার করুন।`
-        : `Use only your pinky finger to strike ${topMistakeKey.toUpperCase()} without moving your whole hand.`;
+      return `কনিষ্ঠা কি (${topMistakeKey.toUpperCase()}) টাইপ করার সময় পুরো হাত না নাড়িয়ে শুধু কনিষ্ঠা ব্যবহার করুন।`;
     }
   }
 
   if (lesson.moduleId === 'module-1') {
-    return isBn
-      ? 'কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনের দিকে তাকান এবং স্বাভাবিক ছন্দে টাইপ করুন।'
-      : 'Keep your eyes on the screen and type in a natural rhythm.';
+    return 'কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনের দিকে তাকান এবং স্বাভাবিক ছন্দে টাইপ করুন।';
   }
 
-  return isBn
-    ? 'গতি বাড়ানোর তাড়াহুড়ো করবেন না, নির্ভুলতা বজায় রাখলে গতি এমনিতেই বৃদ্ধি পাবে।'
-    : 'Never rush for speed; consistent accuracy will automatically unlock fast typing.';
+  return 'গতি বাড়ানোর তাড়াহুড়ো করবেন না, নির্ভুলতা বজায় রাখলে গতি এমনিতেই বৃদ্ধি পাবে।';
 }
