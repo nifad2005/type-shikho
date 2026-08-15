@@ -195,8 +195,12 @@ export async function prefetchAudioChunk(text: string, lang: Language = 'bn'): P
  * Preloads all audio for a given lesson ahead of time
  */
 export function preloadLessonAudio(lesson: Lesson | null, lang: Language = 'bn') {
-  if (!lesson) return;
   loadVoices();
+  // Always pre-buffer welcome greeting
+  prefetchAudioChunk('টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! বাংলা ভয়েস গাইড সহ সঠিক নিয়মে টাচ টাইপিং শিখুন। চলুন প্রথম পাঠ শুরু করি—বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন।', 'bn');
+  prefetchAudioChunk('টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! আপনার বাংলা ভয়েস গাইড সফলভাবে চালু রয়েছে।', 'bn');
+  
+  if (!lesson) return;
   const guide = getLessonSpokenGuide(lesson, 'bn');
   if (guide) {
     prefetchAudioChunk(guide, 'bn');
@@ -372,6 +376,14 @@ export async function speakText(
 export function testVoicePlayback(_lang: Language = 'bn', onEnd?: () => void) {
   const sampleText = 'টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! আপনার বাংলা ভয়েস গাইড সফলভাবে চালু রয়েছে।';
   speakText(sampleText, 'bn', true, onEnd);
+}
+
+/**
+ * Welcoming Audio Greeting for the first page entry
+ */
+export function playWelcomeGreeting(onEnd?: () => void) {
+  const welcomeText = 'টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! বাংলা ভয়েস গাইড সহ সঠিক নিয়মে টাচ টাইপিং শিখুন। চলুন প্রথম পাঠ শুরু করি—বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন।';
+  speakText(welcomeText, 'bn', true, onEnd);
 }
 
 /**

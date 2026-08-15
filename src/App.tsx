@@ -18,7 +18,6 @@ import { ModuleList } from './components/ModuleList';
 import { CustomPracticeArena } from './components/CustomPracticeArena';
 import { SmartPracticeModal } from './components/SmartPracticeModal';
 import { CertificateModal } from './components/CertificateModal';
-import { OnboardingModal } from './components/OnboardingModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ArrowLeft } from 'lucide-react';
 import { stopSpeaking, preloadLessonAudio } from './utils/speech';
@@ -115,7 +114,6 @@ export default function App() {
   const [isCustomPracticeOpen, setIsCustomPracticeOpen] = useState<boolean>(false);
   const [isSmartModalOpen, setIsSmartModalOpen] = useState<boolean>(false);
   const [isCertificateOpen, setIsCertificateOpen] = useState<boolean>(false);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   // Sync to localStorage
@@ -365,17 +363,6 @@ export default function App() {
         onUpdateUserName={(name) => {
           setUserStats((prev) => ({ ...prev, userName: name }));
         }}
-      />
-
-      {/* Onboarding Tutorial Modal */}
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={() => setIsOnboardingOpen(false)}
-        onStartBeginner={() => {
-          setIsOnboardingOpen(false);
-          setActiveLesson(MODULES_DATA[0].lessons[0]);
-        }}
-        language={language}
       />
     </div>
   );

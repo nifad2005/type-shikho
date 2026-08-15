@@ -25,10 +25,7 @@ import {
   Volume2,
   VolumeX,
   AlertTriangle,
-  Sparkles,
-  Info,
-  X,
-  Hand
+  Sparkles
 } from 'lucide-react';
 
 interface TypingArenaProps {
@@ -87,10 +84,14 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
     });
   }, [lesson.id, onLessonComplete]);
 
+  // Ref to track if voice guide has spoken for the current lesson
+  const hasSpokenForLessonRef = useRef<boolean>(false);
+
   // Trigger lesson voice guidance
   const playLessonVoice = useCallback(() => {
     stopSpeaking();
     unlockAudioContext();
+    hasSpokenForLessonRef.current = true;
     const spokenGuide = getLessonSpokenGuide(lesson, language);
     speakText(spokenGuide, language, true);
   }, [lesson, language]);
@@ -108,7 +109,6 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [isCapsLockOn, setIsCapsLockOn] = useState<boolean>(false);
   const [isFocused, setIsFocused] = useState<boolean>(true);
-  const [dismissedBeginnerTips, setDismissedBeginnerTips] = useState<boolean>(false);
 
   // Hidden focus textarea
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -135,10 +135,13 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   useEffect(() => {
     resetPractice();
     preloadLessonAudio(lesson, language);
+    hasSpokenForLessonRef.current = false;
 
     if (voiceEnabled && lesson.type !== 'game') {
       const spokenGuide = getLessonSpokenGuide(lesson, language);
-      speakText(spokenGuide, language, true);
+      speakText(spokenGuide, language, true, () => {
+        hasSpokenForLessonRef.current = true;
+      });
     }
   }, [lesson.id, voiceEnabled, language]);
 
@@ -149,11 +152,18 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
     };
   }, []);
 
-  // Global click & focus maintainer
+  // Global click & focus maintainer with auto voice trigger on first click
   useEffect(() => {
     inputRef.current?.focus();
     const handleWindowClick = (e: MouseEvent) => {
       unlockAudioContext();
+      
+      // If voice hasn't spoken yet due to browser autoplay policy, trigger on first click!
+      if (voiceEnabled && !hasSpokenForLessonRef.current && typedInput.length === 0) {
+        hasSpokenForLessonRef.current = true;
+        playLessonVoice();
+      }
+
       const target = e.target as HTMLElement;
       if (
         target.closest('button') || 
@@ -168,7 +178,7 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
 
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
-  }, []);
+  }, [voiceEnabled, playLessonVoice, typedInput.length]);
 
   // Keystroke metrics calculation
   const currentIndex = typedInput.length;
@@ -471,24 +481,15 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         <div className="flex items-center gap-2">
           {onToggleVoice && (
             <button
+              id="btn-arena-voice-toggle"
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleVoice();
               }}
+              title={voiceEnabled ? (isBn ? 'ভয়েস বন্ধ করুন' : 'Mute Voice') : (isBn ? 'ভয়েস চালু করুন' : 'Enable Voice')}
               className="p-1 rounded-lg hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
             >
-              {voiceEnabled ? <Volume2 className="w-4 h-4 text-teal-600" /> : <VolumeX className="w-4 h-4 opacity-50" />}
-            </button>
-          )}
-          {voiceEnabled && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                playLessonVoice();
-              }}
-              className="p-1 rounded-lg hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 text-teal-600" />
+              {voiceEnabled ? <Volume2 className="w-4 h-4 text-teal-600 animate-pulse" /> : <VolumeX className="w-4 h-4 opacity-50" />}
             </button>
           )}
         </div>
@@ -514,6 +515,24 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Minimal First-Lesson Welcome Greeting with smooth subtle entrance animation */}
+      {lesson.id === 'm1-l1' && typedInput.length === 0 && !isCompleted && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.35, ease: 'easeOut' }}
+          className="w-full flex items-center justify-center gap-2 py-2 px-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-600 dark:text-teal-400 text-xs font-medium select-none shadow-xs"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-teal-500 animate-pulse shrink-0" />
+          <span className="leading-tight">
+            {isBn
+              ? 'স্বাগতম! বাম তর্জনী F এবং ডান তর্জনী J-তে রাখুন। কীবোর্ডে না তাকিয়ে স্ক্রিনে তাকিয়ে টাইপ শুরু করুন।'
+              : 'Welcome! Place left index on F and right on J. Look at the screen and start typing.'}
+          </span>
+        </motion.div>
+      )}
 
       {/* Main Text Display Arena (The Central Hero Focus) */}
       <div
@@ -582,36 +601,6 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
           })}
         </div>
       </div>
-
-      {/* Beginner Essential Guidance Pill (For Module 1 / Lesson 1) */}
-      {(lesson.moduleId === 'module-1' || lesson.id === 'm1-l1') && !dismissedBeginnerTips && !isCompleted && (
-        <div className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs">
-          <div className="flex items-center gap-2.5">
-            <Hand className="w-4 h-4 text-teal-400 shrink-0" />
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] sm:text-xs">
-              <span>
-                <strong className="font-semibold text-white">{isBn ? 'হাত রাখার নিয়ম:' : 'Position:'}</strong>{' '}
-                {isBn ? 'বাম তর্জনী F এবং ডান তর্জনী J-তে রাখুন।' : 'Left index on F, right index on J.'}
-              </span>
-              <span className="hidden sm:inline text-teal-500/40">•</span>
-              <span>
-                <strong className="font-semibold text-white">{isBn ? 'পরামর্শ:' : 'Tip:'}</strong>{' '}
-                {isBn ? 'কীবোর্ডে না তাকিয়ে স্ক্রিনে তাকিয়ে টাইপ করুন।' : 'Look at the screen, not the keyboard.'}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setDismissedBeginnerTips(true);
-            }}
-            className="p-1 rounded-lg text-teal-400/60 hover:text-teal-300 hover:bg-teal-500/10 cursor-pointer ml-2"
-            title={isBn ? 'বন্ধ করুন' : 'Dismiss'}
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
 
       {/* Virtual Keyboard Guide (Crisp & Responsive) */}
       <VirtualKeyboard
