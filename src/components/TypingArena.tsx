@@ -114,6 +114,33 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const textContainerRef = useRef<HTMLDivElement>(null);
 
+  // Typewriter animation for Lesson 1 welcome banner
+  const fullWelcomeText = isBn
+    ? 'NIBARON Type Shikho তে আপনাকে স্বাগতম। আপনার টাইপিং শেখার পথটা সুন্দর হোক।'
+    : 'Welcome to NIBARON Type Shikho. Wish you a wonderful typing journey!';
+  
+  const [displayedWelcome, setDisplayedWelcome] = useState<string>('');
+  const [isTypingAnimationDone, setIsTypingAnimationDone] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (lesson.id !== 'm1-l1') return;
+    setDisplayedWelcome('');
+    setIsTypingAnimationDone(false);
+
+    let charIndex = 0;
+    const interval = setInterval(() => {
+      charIndex++;
+      if (charIndex <= fullWelcomeText.length) {
+        setDisplayedWelcome(fullWelcomeText.slice(0, charIndex));
+      } else {
+        setIsTypingAnimationDone(true);
+        clearInterval(interval);
+      }
+    }, 38);
+
+    return () => clearInterval(interval);
+  }, [lesson.id, fullWelcomeText]);
+
   // Reset function
   const resetPractice = useCallback(() => {
     stopSpeaking();
@@ -131,19 +158,37 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
     }
   }, []);
 
-  // When lesson changes or loads: reset and auto-speak
+  // When lesson changes or loads: reset, preload and proactively trigger speech
   useEffect(() => {
     resetPractice();
     preloadLessonAudio(lesson, language);
     hasSpokenForLessonRef.current = false;
 
+    // 1. Proactively attempt immediate autoplay speech
     if (voiceEnabled && lesson.type !== 'game') {
       const spokenGuide = getLessonSpokenGuide(lesson, language);
       speakText(spokenGuide, language, true, () => {
         hasSpokenForLessonRef.current = true;
       });
     }
-  }, [lesson.id, voiceEnabled, language]);
+
+    // 2. Comprehensive interaction listeners (mousemove, pointermove, keydown, touchstart, focus)
+    // to guarantee speech fires on the very first micro-movement or keypress if browser autoplay hesitated
+    const triggerAudioOnInteraction = () => {
+      unlockAudioContext();
+      if (voiceEnabled && !hasSpokenForLessonRef.current) {
+        hasSpokenForLessonRef.current = true;
+        playLessonVoice();
+      }
+    };
+
+    const events = ['pointerdown', 'keydown', 'touchstart', 'mousemove', 'pointermove', 'focus', 'wheel', 'mousedown'];
+    events.forEach((evt) => window.addEventListener(evt, triggerAudioOnInteraction, { once: true, passive: true }));
+
+    return () => {
+      events.forEach((evt) => window.removeEventListener(evt, triggerAudioOnInteraction));
+    };
+  }, [lesson.id, voiceEnabled, language, playLessonVoice, resetPractice]);
 
   // Clean up speech when unmounting
   useEffect(() => {
@@ -152,18 +197,12 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
     };
   }, []);
 
-  // Global click & focus maintainer with auto voice trigger on first click
+  // Global click & focus maintainer
   useEffect(() => {
     inputRef.current?.focus();
     const handleWindowClick = (e: MouseEvent) => {
       unlockAudioContext();
       
-      // If voice hasn't spoken yet due to browser autoplay policy, trigger on first click!
-      if (voiceEnabled && !hasSpokenForLessonRef.current && typedInput.length === 0) {
-        hasSpokenForLessonRef.current = true;
-        playLessonVoice();
-      }
-
       const target = e.target as HTMLElement;
       if (
         target.closest('button') || 
@@ -178,7 +217,7 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
 
     window.addEventListener('click', handleWindowClick);
     return () => window.removeEventListener('click', handleWindowClick);
-  }, [voiceEnabled, playLessonVoice, typedInput.length]);
+  }, []);
 
   // Keystroke metrics calculation
   const currentIndex = typedInput.length;
@@ -516,20 +555,23 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         </div>
       </div>
 
-      {/* Minimal First-Lesson Welcome Greeting with smooth subtle entrance animation */}
+      {/* Minimal First-Lesson Welcome Greeting with real Typing Animation */}
       {lesson.id === 'm1-l1' && typedInput.length === 0 && !isCompleted && (
         <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -6 }}
+          initial={{ opacity: 0, y: -8, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -8, scale: 0.98 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/20 text-teal-600 dark:text-teal-400 text-xs font-medium select-none shadow-xs"
+          className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-2xl bg-teal-500/10 border border-teal-500/25 text-teal-700 dark:text-teal-300 text-xs sm:text-sm font-medium select-none shadow-xs text-center min-h-[44px]"
         >
-          <Sparkles className="w-3.5 h-3.5 text-teal-500 animate-pulse shrink-0" />
-          <span className="leading-tight">
-            {isBn
-              ? 'স্বাগতম! বাম তর্জনী F এবং ডান তর্জনী J-তে রাখুন। কীবোর্ডে না তাকিয়ে স্ক্রিনে তাকিয়ে টাইপ শুরু করুন।'
-              : 'Welcome! Place left index on F and right on J. Look at the screen and start typing.'}
+          <Sparkles className="w-4 h-4 text-teal-500 animate-pulse shrink-0" />
+          <span className="leading-snug">
+            <span className="font-semibold text-slate-900 dark:text-slate-100">
+              {displayedWelcome}
+            </span>
+            {!isTypingAnimationDone && (
+              <span className="inline-block w-1.5 h-3.5 ml-1 bg-teal-500 animate-pulse align-middle" />
+            )}
           </span>
         </motion.div>
       )}

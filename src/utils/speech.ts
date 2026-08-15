@@ -197,7 +197,7 @@ export async function prefetchAudioChunk(text: string, lang: Language = 'bn'): P
 export function preloadLessonAudio(lesson: Lesson | null, lang: Language = 'bn') {
   loadVoices();
   // Always pre-buffer welcome greeting
-  prefetchAudioChunk('টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! বাংলা ভয়েস গাইড সহ সঠিক নিয়মে টাচ টাইপিং শিখুন। চলুন প্রথম পাঠ শুরু করি—বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন।', 'bn');
+  prefetchAudioChunk('নিবারণ টাইপ শিখো তে আপনাকে স্বাগতম। আপনার টাইপিং শেখার পথটা সুন্দর হোক। বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন। কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ করুন।', 'bn');
   prefetchAudioChunk('টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! আপনার বাংলা ভয়েস গাইড সফলভাবে চালু রয়েছে।', 'bn');
   
   if (!lesson) return;
@@ -382,7 +382,7 @@ export function testVoicePlayback(_lang: Language = 'bn', onEnd?: () => void) {
  * Welcoming Audio Greeting for the first page entry
  */
 export function playWelcomeGreeting(onEnd?: () => void) {
-  const welcomeText = 'টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! বাংলা ভয়েস গাইড সহ সঠিক নিয়মে টাচ টাইপিং শিখুন। চলুন প্রথম পাঠ শুরু করি—বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন।';
+  const welcomeText = 'নিবারণ টাইপ শিখো তে আপনাকে স্বাগতম। আপনার টাইপিং শেখার পথটা সুন্দর হোক। বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন। কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ করুন।';
   speakText(welcomeText, 'bn', true, onEnd);
 }
 
@@ -417,9 +417,9 @@ export function getLessonSpokenGuide(lesson: Lesson, _lang?: Language): string {
     return 'রিফ্লেক্স চ্যালেঞ্জ! উপরে পড়া অক্ষরগুলো মাটিতে পড়ার আগে দ্রুত কীবোর্ডে টাইপ করুন।';
   }
 
-  // Module 1: Home Row
+  // Module 1: Home Row - Lesson 1 Special Warm Welcome
   if (lesson.id === 'm1-l1') {
-    return 'টাইপিংয়ের প্রথম পাঠে স্বাগতম! বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন। কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ করুন।';
+    return 'নিবারণ টাইপ শিখো তে আপনাকে স্বাগতম। আপনার টাইপিং শেখার পথটা সুন্দর হোক। বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন। কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ করুন।';
   }
   if (lesson.id === 'm1-l2') {
     return 'দ্বিতীয় পাঠ: বাম মধ্যমা ডি কি এবং ডান মধ্যমা কে কি-তে রাখুন।';
