@@ -25,7 +25,10 @@ import {
   Volume2,
   VolumeX,
   AlertTriangle,
-  Sparkles
+  Sparkles,
+  Info,
+  X,
+  Hand
 } from 'lucide-react';
 
 interface TypingArenaProps {
@@ -105,6 +108,7 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
   const [isCapsLockOn, setIsCapsLockOn] = useState<boolean>(false);
   const [isFocused, setIsFocused] = useState<boolean>(true);
+  const [dismissedBeginnerTips, setDismissedBeginnerTips] = useState<boolean>(false);
 
   // Hidden focus textarea
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -578,6 +582,36 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
           })}
         </div>
       </div>
+
+      {/* Beginner Essential Guidance Pill (For Module 1 / Lesson 1) */}
+      {(lesson.moduleId === 'module-1' || lesson.id === 'm1-l1') && !dismissedBeginnerTips && !isCompleted && (
+        <div className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs">
+          <div className="flex items-center gap-2.5">
+            <Hand className="w-4 h-4 text-teal-400 shrink-0" />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] sm:text-xs">
+              <span>
+                <strong className="font-semibold text-white">{isBn ? 'হাত রাখার নিয়ম:' : 'Position:'}</strong>{' '}
+                {isBn ? 'বাম তর্জনী F এবং ডান তর্জনী J-তে রাখুন।' : 'Left index on F, right index on J.'}
+              </span>
+              <span className="hidden sm:inline text-teal-500/40">•</span>
+              <span>
+                <strong className="font-semibold text-white">{isBn ? 'পরামর্শ:' : 'Tip:'}</strong>{' '}
+                {isBn ? 'কীবোর্ডে না তাকিয়ে স্ক্রিনে তাকিয়ে টাইপ করুন।' : 'Look at the screen, not the keyboard.'}
+              </span>
+            </div>
+          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDismissedBeginnerTips(true);
+            }}
+            className="p-1 rounded-lg text-teal-400/60 hover:text-teal-300 hover:bg-teal-500/10 cursor-pointer ml-2"
+            title={isBn ? 'বন্ধ করুন' : 'Dismiss'}
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Virtual Keyboard Guide (Crisp & Responsive) */}
       <VirtualKeyboard

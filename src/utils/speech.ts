@@ -1,22 +1,19 @@
 /**
  * High-Performance Bengali & English Voice Instructor Engine
  * Robust Multi-Tier Architecture:
- * Tier 1: High-Fidelity Server Audio TTS (when backend is available)
- * Tier 2: Native Web Speech Synthesis (works offline & in 100% of static/hosted deployments)
- * Tier 3: Direct fallback audio streams
+ * Tier 1: Direct Cloud TTS Stream (Google Public TTS / API - works 100% on Vercel, Netlify, localhost)
+ * Tier 2: Native Web Speech Synthesis (works offline on any browser/device)
+ * Tier 3: Web Audio Synth Feedback Chimes
  */
 
 import { Lesson, Language, UserStats } from '../types';
+import { unlockWebAudio } from './audio';
 
-// Dedicated single audio element for seamless browser autoplay authorization
 let sharedAudio: HTMLAudioElement | null = null;
 let isAudioUnlocked = false;
 let isCurrentlySpeaking = false;
 let currentSpokenText = '';
 let speechListeners: Array<(speaking: boolean, text: string) => void> = [];
-
-// Track server TTS availability (e.g. false on static Vercel/Netlify/GitHub Pages deployments)
-let isServerTTSAvailable: boolean | null = null;
 
 // Audio Blob Cache for 0ms instantaneous replays
 const blobCache = new Map<string, string>();
@@ -65,7 +62,6 @@ function getSharedAudio(): HTMLAudioElement {
 
     sharedAudio.addEventListener('error', (e) => {
       console.warn('Audio element error, falling back to Web Speech:', e);
-      // If server audio fails, mark server TTS as unavailable and fallback
       if (isCurrentlySpeaking && currentSpokenText) {
         speakViaWebSpeech(currentSpokenText, 'bn');
       } else {
@@ -102,7 +98,8 @@ export function subscribeToSpeechState(listener: (speaking: boolean, text: strin
  */
 export function unlockAudioContext() {
   if (typeof window === 'undefined') return;
-  
+  unlockWebAudio();
+
   if (!isAudioUnlocked) {
     const audio = getSharedAudio();
     if (audio) {
@@ -111,9 +108,7 @@ export function unlockAudioContext() {
       audio.play().then(() => {
         isAudioUnlocked = true;
         audio.pause();
-      }).catch(() => {
-        // User hasn't interacted yet
-      });
+      }).catch(() => {});
     }
   }
 
@@ -158,35 +153,11 @@ export function stopSpeaking() {
 }
 
 /**
- * Checks if the backend TTS server is available and actually returning audio
+ * Generates direct client TTS stream URL (universally accessible)
  */
-async function checkServerTTS(): Promise<boolean> {
-  if (isServerTTSAvailable !== null) {
-    return isServerTTSAvailable;
-  }
-  if (typeof window === 'undefined') return false;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    
-    // Test small sample
-    const testUrl = `/api/tts?text=${encodeURIComponent('test')}&lang=en`;
-    const res = await fetch(testUrl, { signal: controller.signal });
-    clearTimeout(timeout);
-
-    const contentType = res.headers.get('content-type') || '';
-    if (res.ok && contentType.includes('audio')) {
-      isServerTTSAvailable = true;
-      return true;
-    } else {
-      isServerTTSAvailable = false;
-      return false;
-    }
-  } catch {
-    isServerTTSAvailable = false;
-    return false;
-  }
+export function getDirectTTSUrl(text: string, lang: Language): string {
+  const targetLang = lang === 'bn' ? 'bn' : 'en';
+  return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${targetLang}&q=${encodeURIComponent(text.trim())}`;
 }
 
 /**
@@ -206,33 +177,16 @@ export async function prefetchAudioChunk(text: string, lang: Language): Promise<
   }
 
   const fetchPromise = (async () => {
-    // If server TTS is known to be unavailable, don't waste network requests
-    if (isServerTTSAvailable === false) {
+    try {
+      // 1. Try direct public TTS stream
+      const streamUrl = getDirectTTSUrl(clean, lang);
+      blobCache.set(cacheKey, streamUrl);
+      activeFetches.delete(cacheKey);
+      return streamUrl;
+    } catch {
+      activeFetches.delete(cacheKey);
       return null;
     }
-
-    try {
-      const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
-      const res = await fetch(url);
-      const contentType = res.headers.get('content-type') || '';
-
-      // Crucial: Only cache if the response is actually valid AUDIO (not HTML or 404 from static host)
-      if (res.ok && contentType.includes('audio')) {
-        isServerTTSAvailable = true;
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        blobCache.set(cacheKey, objectUrl);
-        activeFetches.delete(cacheKey);
-        return objectUrl;
-      } else {
-        // If not audio, server TTS is not supported in this deployment
-        isServerTTSAvailable = false;
-      }
-    } catch {
-      isServerTTSAvailable = false;
-    }
-    activeFetches.delete(cacheKey);
-    return null;
   })();
 
   activeFetches.set(cacheKey, fetchPromise);
@@ -259,7 +213,7 @@ function findBestVoice(lang: Language): SpeechSynthesisVoice | null {
   if (!voices || voices.length === 0) return null;
 
   if (lang === 'bn') {
-    // 1. Exact or startsWith Bengali
+    // 1. Exact Bengali match
     const bnExact = voices.find(
       (v) =>
         v.lang.toLowerCase() === 'bn-bd' ||
@@ -279,7 +233,7 @@ function findBestVoice(lang: Language): SpeechSynthesisVoice | null {
     );
     if (bnSub) return bnSub;
 
-    // 3. Indian English / default regional fallback if no Bengali voice is installed on OS
+    // 3. Indian English / regional fallback
     const inVoice = voices.find((v) => v.lang.toLowerCase().includes('in') || v.lang.toLowerCase().includes('en-in'));
     if (inVoice) return inVoice;
   } else {
@@ -295,7 +249,7 @@ function findBestVoice(lang: Language): SpeechSynthesisVoice | null {
 }
 
 /**
- * Native Browser Web Speech Synthesis Engine (100% client-side, zero backend needed)
+ * Native Browser Web Speech Synthesis Engine (100% client-side offline fallback)
  */
 export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => void) {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -339,8 +293,7 @@ export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => vo
     };
 
     utterance.onend = finish;
-    utterance.onerror = (e) => {
-      console.warn('Speech synthesis utterance error:', e);
+    utterance.onerror = () => {
       finish();
     };
 
@@ -369,7 +322,7 @@ export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => vo
 }
 
 /**
- * Main Speak Function: Seamlessly uses fastest available source
+ * Main Speak Function: Plays audio via HTML5 Audio with instant Web Speech fallback
  */
 export async function speakText(
   text: string,
@@ -386,63 +339,41 @@ export async function speakText(
   unlockAudioContext();
   const cleanText = text.trim();
 
-  // Step 1: If server TTS is known to be disabled or in static deployment, go straight to Web Speech
-  if (isServerTTSAvailable === false) {
-    speakViaWebSpeech(cleanText, lang, onEnd);
-    return;
-  }
-
-  const cacheKey = `${lang}:${cleanText}`;
-  let audioUrl = blobCache.get(cacheKey);
-
-  if (!audioUrl && activeFetches.has(cacheKey)) {
-    audioUrl = (await activeFetches.get(cacheKey)) || undefined;
-  }
-
-  // If not cached, attempt to fetch from server proxy
-  if (!audioUrl) {
-    try {
-      const serverAvailable = await checkServerTTS();
-      if (serverAvailable) {
-        audioUrl = await prefetchAudioChunk(cleanText, lang) || undefined;
-      }
-    } catch {
-      isServerTTSAvailable = false;
-    }
-  }
-
-  // If we have a genuine Audio URL from server, play via HTML5 Audio
-  if (audioUrl) {
+  // Try direct Audio Stream
+  try {
+    const streamUrl = getDirectTTSUrl(cleanText, lang);
     const audio = getSharedAudio();
     notifySpeechState(true, cleanText);
 
-    try {
-      audio.src = audioUrl;
+    audio.src = streamUrl;
 
-      const handleEnded = () => {
-        audio.removeEventListener('ended', handleEnded);
-        notifySpeechState(false, '');
-        if (onEnd) onEnd();
-      };
-      audio.addEventListener('ended', handleEnded, { once: true });
+    const handleEnded = () => {
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+      notifySpeechState(false, '');
+      if (onEnd) onEnd();
+    };
 
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.warn('Audio play auto-unlock or format error, fallback to Web Speech:', err);
-          speakViaWebSpeech(cleanText, lang, onEnd);
-        });
-      }
-      return;
-    } catch (err) {
-      console.warn('Audio play execution failed, fallback to Web Speech:', err);
+    const handleError = () => {
+      audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
+      // Seamlessly fallback to browser Web Speech API
       speakViaWebSpeech(cleanText, lang, onEnd);
-      return;
-    }
-  }
+    };
 
-  // Default Fallback: Native Browser Web Speech (guaranteed client-side execution)
-  speakViaWebSpeech(cleanText, lang, onEnd);
+    audio.addEventListener('ended', handleEnded, { once: true });
+    audio.addEventListener('error', handleError, { once: true });
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        // Autoplay policy or format fallback
+        speakViaWebSpeech(cleanText, lang, onEnd);
+      });
+    }
+  } catch {
+    speakViaWebSpeech(cleanText, lang, onEnd);
+  }
 }
 
 /**
@@ -474,8 +405,8 @@ export function getSpeechEngineInfo(lang: Language = 'bn'): {
       bestVoice.name.toLowerCase().includes('বাংলা'));
 
   return {
-    engineType: isServerTTSAvailable ? 'Server Audio Stream' : 'Browser Web Speech Engine',
-    voiceName: bestVoice ? `${bestVoice.name} (${bestVoice.lang})` : (lang === 'bn' ? 'বাংলা ভয়েস সিন্থেসিস' : 'English Voice'),
+    engineType: 'Cloud Stream / Native Web Speech',
+    voiceName: bestVoice ? `${bestVoice.name} (${bestVoice.lang})` : (lang === 'bn' ? 'বাংলা ভয়েস ইঞ্জিন' : 'English Voice Engine'),
     isBengaliNative: !!isBengali,
   };
 }
@@ -488,29 +419,29 @@ export function getLessonSpokenGuide(lesson: Lesson, lang: Language): string {
 
   if (lesson.type === 'game') {
     return isBn
-      ? 'স্কাইফল রিফ্লেক্স চ্যালেঞ্জ! হোম রো পজিশনে আঙুল রাখুন এবং লেটারগুলো পড়ার আগেই দ্রুত টাইপ করুন।'
-      : 'Welcome to Skyfall challenge! Place fingers on home row and destroy letters before they hit the bottom.';
+      ? 'রিফ্লেক্স চ্যালেঞ্জ! উপরে পড়া অক্ষরগুলো মাটিতে পড়ার আগে দ্রুত কীবোর্ডে টাইপ করুন।'
+      : 'Reflex challenge! Type the falling letters before they hit the ground.';
   }
 
   // Module 1: Home Row
   if (lesson.id === 'm1-l1') {
     return isBn
-      ? 'টাইপিং শেখার প্রথম পাঠে স্বাগতম! বাম হাতের তর্জনী এফ কি-তে এবং ডান হাতের তর্জনী জে কি-তে রাখুন। কিবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ শুরু করুন।'
-      : 'Welcome! Place your left index on F and right index on J. Feel the bumps and keep your eyes on the screen.';
+      ? 'টাইপিংয়ের প্রথম পাঠে স্বাগতম! বাম তর্জনী এফ কি এবং ডান তর্জনী জে কি-তে রাখুন। কীবোর্ডের দিকে না তাকিয়ে সোজা স্ক্রিনে তাকিয়ে টাইপ করুন।'
+      : 'Welcome! Rest left index on F and right index on J. Feel the bumps and keep eyes on screen.';
   }
   if (lesson.id === 'm1-l2') {
     return isBn
-      ? 'দ্বিতীয় পাঠ: বাম হাতের মধ্যমা ডি কি-তে এবং ডান হাতের মধ্যমা কে কি-তে রাখুন।'
-      : 'Lesson 2: Rest your left middle finger on D and right middle finger on K.';
+      ? 'দ্বিতীয় পাঠ: বাম মধ্যমা ডি কি এবং ডান মধ্যমা কে কি-তে রাখুন।'
+      : 'Lesson 2: Rest left middle finger on D and right middle finger on K.';
   }
   if (lesson.id === 'm1-l3') {
     return isBn
-      ? 'তৃতীয় পাঠ: বাম হাতের অনামিকা এস কি-তে এবং ডান হাতের অনামিকা এল কি-তে স্থাপন করুন।'
-      : 'Lesson 3: Place your left ring finger on S and right ring finger on L.';
+      ? 'তৃতীয় পাঠ: বাম অনামিকা এস কি এবং ডান অনামিকা এল কি-তে রাখুন।'
+      : 'Lesson 3: Place left ring finger on S and right ring finger on L.';
   }
   if (lesson.id === 'm1-l4') {
     return isBn
-      ? 'চতুর্থ পাঠ: বাম কনিষ্ঠা দিয়ে এ কি এবং ডান কনিষ্ঠা দিয়ে সেমিকোলন কি টাইপ করুন।'
+      ? 'চতুর্থ পাঠ: বাম কনিষ্ঠা এ কি এবং ডান কনিষ্ঠা দিয়ে সেমিকোলন কি টাইপ করুন।'
       : 'Lesson 4: Left pinky on A, right pinky on semicolon.';
   }
   if (lesson.id === 'm1-l5' || lesson.id === 'm1-l6') {

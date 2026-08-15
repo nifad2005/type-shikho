@@ -1,19 +1,44 @@
 import { SoundEffectType } from '../types';
 
 let audioCtx: AudioContext | null = null;
+let isUnlocked = false;
 
-function getAudioContext(): AudioContext | null {
+export function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
+  
   if (!audioCtx) {
     const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (AudioContextClass) {
       audioCtx = new AudioContextClass();
     }
   }
+
   if (audioCtx && audioCtx.state === 'suspended') {
-    audioCtx.resume();
+    audioCtx.resume().catch(() => {});
   }
+
   return audioCtx;
+}
+
+export function unlockWebAudio() {
+  const ctx = getAudioContext();
+  if (ctx && !isUnlocked) {
+    if (ctx.state === 'suspended') {
+      ctx.resume().then(() => {
+        isUnlocked = true;
+      }).catch(() => {});
+    } else {
+      isUnlocked = true;
+    }
+  }
+}
+
+// Auto-attach unlock listeners on first user gesture
+if (typeof window !== 'undefined') {
+  const unlock = () => unlockWebAudio();
+  window.addEventListener('click', unlock, { passive: true, once: false });
+  window.addEventListener('keydown', unlock, { passive: true, once: false });
+  window.addEventListener('touchstart', unlock, { passive: true, once: false });
 }
 
 export function playKeySound(type: SoundEffectType, isSpace = false) {
@@ -42,7 +67,7 @@ export function playKeySound(type: SoundEffectType, isSpace = false) {
     osc.stop(now + 0.04);
 
     // Subtle high frequency click transient
-    const noiseBuffer = ctx.createBuffer(1, ctx.sampleRate * 0.008, ctx.sampleRate);
+    const noiseBuffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.008), ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
     for (let i = 0; i < noiseBuffer.length; i++) {
       output[i] = Math.random() * 2 - 1;
