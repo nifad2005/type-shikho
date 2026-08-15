@@ -1,6 +1,9 @@
 /**
  * High-Performance Bengali & English Voice Instructor Engine
- * ZERO AI / Deterministic audio streaming with instant caching & zero latency.
+ * Robust Multi-Tier Architecture:
+ * Tier 1: High-Fidelity Server Audio TTS (when backend is available)
+ * Tier 2: Native Web Speech Synthesis (works offline & in 100% of static/hosted deployments)
+ * Tier 3: Direct fallback audio streams
  */
 
 import { Lesson, Language, UserStats } from '../types';
@@ -12,9 +15,38 @@ let isCurrentlySpeaking = false;
 let currentSpokenText = '';
 let speechListeners: Array<(speaking: boolean, text: string) => void> = [];
 
+// Track server TTS availability (e.g. false on static Vercel/Netlify/GitHub Pages deployments)
+let isServerTTSAvailable: boolean | null = null;
+
 // Audio Blob Cache for 0ms instantaneous replays
 const blobCache = new Map<string, string>();
 const activeFetches = new Map<string, Promise<string | null>>();
+
+// Cached browser voices
+let cachedVoices: SpeechSynthesisVoice[] = [];
+
+function loadVoices(): SpeechSynthesisVoice[] {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return [];
+  }
+  try {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices && voices.length > 0) {
+      cachedVoices = voices;
+    }
+  } catch (err) {
+    console.warn('Error loading speech voices:', err);
+  }
+  return cachedVoices;
+}
+
+// Listen for browser voices loading
+if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+  loadVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    loadVoices();
+  };
+}
 
 function getSharedAudio(): HTMLAudioElement {
   if (!sharedAudio && typeof window !== 'undefined') {
@@ -32,8 +64,13 @@ function getSharedAudio(): HTMLAudioElement {
     });
 
     sharedAudio.addEventListener('error', (e) => {
-      console.warn('Audio playback error:', e);
-      notifySpeechState(false, '');
+      console.warn('Audio element error, falling back to Web Speech:', e);
+      // If server audio fails, mark server TTS as unavailable and fallback
+      if (isCurrentlySpeaking && currentSpokenText) {
+        speakViaWebSpeech(currentSpokenText, 'bn');
+      } else {
+        notifySpeechState(false, '');
+      }
     });
   }
   return sharedAudio!;
@@ -65,21 +102,27 @@ export function subscribeToSpeechState(listener: (speaking: boolean, text: strin
  */
 export function unlockAudioContext() {
   if (typeof window === 'undefined') return;
-  const audio = getSharedAudio();
-  if (!isAudioUnlocked && audio) {
-    // Play silent 1-sample buffer or tiny sound to unlock media pipeline
-    audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-    audio.play().then(() => {
-      isAudioUnlocked = true;
-      audio.pause();
-    }).catch(() => {
-      // User hasn't interacted yet
-    });
+  
+  if (!isAudioUnlocked) {
+    const audio = getSharedAudio();
+    if (audio) {
+      // Play silent 1-sample buffer to unlock media pipeline
+      audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      audio.play().then(() => {
+        isAudioUnlocked = true;
+        audio.pause();
+      }).catch(() => {
+        // User hasn't interacted yet
+      });
+    }
   }
 
   try {
-    if ('speechSynthesis' in window && window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
+    if ('speechSynthesis' in window) {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      loadVoices();
     }
   } catch {}
 }
@@ -115,7 +158,39 @@ export function stopSpeaking() {
 }
 
 /**
- * Prefetches and caches audio for a given sentence to ensure 0ms latency
+ * Checks if the backend TTS server is available and actually returning audio
+ */
+async function checkServerTTS(): Promise<boolean> {
+  if (isServerTTSAvailable !== null) {
+    return isServerTTSAvailable;
+  }
+  if (typeof window === 'undefined') return false;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
+    
+    // Test small sample
+    const testUrl = `/api/tts?text=${encodeURIComponent('test')}&lang=en`;
+    const res = await fetch(testUrl, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('audio')) {
+      isServerTTSAvailable = true;
+      return true;
+    } else {
+      isServerTTSAvailable = false;
+      return false;
+    }
+  } catch {
+    isServerTTSAvailable = false;
+    return false;
+  }
+}
+
+/**
+ * Prefetches and caches audio for a given sentence to ensure instant playback
  */
 export async function prefetchAudioChunk(text: string, lang: Language): Promise<string | null> {
   const clean = text.trim();
@@ -131,18 +206,30 @@ export async function prefetchAudioChunk(text: string, lang: Language): Promise<
   }
 
   const fetchPromise = (async () => {
+    // If server TTS is known to be unavailable, don't waste network requests
+    if (isServerTTSAvailable === false) {
+      return null;
+    }
+
     try {
       const url = `/api/tts?text=${encodeURIComponent(clean)}&lang=${lang}`;
       const res = await fetch(url);
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+
+      // Crucial: Only cache if the response is actually valid AUDIO (not HTML or 404 from static host)
+      if (res.ok && contentType.includes('audio')) {
+        isServerTTSAvailable = true;
         const blob = await res.blob();
         const objectUrl = URL.createObjectURL(blob);
         blobCache.set(cacheKey, objectUrl);
         activeFetches.delete(cacheKey);
         return objectUrl;
+      } else {
+        // If not audio, server TTS is not supported in this deployment
+        isServerTTSAvailable = false;
       }
-    } catch (err) {
-      console.warn('Prefetch audio error:', err);
+    } catch {
+      isServerTTSAvailable = false;
     }
     activeFetches.delete(cacheKey);
     return null;
@@ -157,6 +244,7 @@ export async function prefetchAudioChunk(text: string, lang: Language): Promise<
  */
 export function preloadLessonAudio(lesson: Lesson | null, lang: Language) {
   if (!lesson) return;
+  loadVoices();
   const guide = getLessonSpokenGuide(lesson, lang);
   if (guide) {
     prefetchAudioChunk(guide, lang);
@@ -164,7 +252,124 @@ export function preloadLessonAudio(lesson: Lesson | null, lang: Language) {
 }
 
 /**
- * Speaks text using the fastest available preloaded audio stream or native TTS
+ * Finds the best available browser speech synthesis voice for a language
+ */
+function findBestVoice(lang: Language): SpeechSynthesisVoice | null {
+  const voices = cachedVoices.length > 0 ? cachedVoices : loadVoices();
+  if (!voices || voices.length === 0) return null;
+
+  if (lang === 'bn') {
+    // 1. Exact or startsWith Bengali
+    const bnExact = voices.find(
+      (v) =>
+        v.lang.toLowerCase() === 'bn-bd' ||
+        v.lang.toLowerCase() === 'bn-in' ||
+        v.lang.toLowerCase() === 'bn_bd' ||
+        v.lang.toLowerCase() === 'bn_in'
+    );
+    if (bnExact) return bnExact;
+
+    // 2. Contains bn or bangla / bengali
+    const bnSub = voices.find(
+      (v) =>
+        v.lang.toLowerCase().startsWith('bn') ||
+        v.name.toLowerCase().includes('bangla') ||
+        v.name.toLowerCase().includes('bengali') ||
+        v.name.toLowerCase().includes('বাংলা')
+    );
+    if (bnSub) return bnSub;
+
+    // 3. Indian English / default regional fallback if no Bengali voice is installed on OS
+    const inVoice = voices.find((v) => v.lang.toLowerCase().includes('in') || v.lang.toLowerCase().includes('en-in'));
+    if (inVoice) return inVoice;
+  } else {
+    // English
+    const enUs = voices.find((v) => v.lang.toLowerCase() === 'en-us' || v.lang.toLowerCase() === 'en_us');
+    if (enUs) return enUs;
+
+    const enSub = voices.find((v) => v.lang.toLowerCase().startsWith('en'));
+    if (enSub) return enSub;
+  }
+
+  return voices[0] || null;
+}
+
+/**
+ * Native Browser Web Speech Synthesis Engine (100% client-side, zero backend needed)
+ */
+export function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => void) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    notifySpeechState(false, '');
+    if (onEnd) onEnd();
+    return;
+  }
+
+  try {
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    const bestVoice = findBestVoice(lang);
+
+    if (bestVoice) {
+      utterance.voice = bestVoice;
+    }
+
+    if (lang === 'bn') {
+      utterance.lang = bestVoice?.lang || 'bn-BD';
+      utterance.rate = 0.92;
+      utterance.pitch = 1.0;
+    } else {
+      utterance.lang = bestVoice?.lang || 'en-US';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+    }
+
+    utterance.volume = 1.0;
+
+    let hasEnded = false;
+    const finish = () => {
+      if (hasEnded) return;
+      hasEnded = true;
+      notifySpeechState(false, '');
+      if (onEnd) onEnd();
+    };
+
+    utterance.onstart = () => {
+      notifySpeechState(true, text);
+    };
+
+    utterance.onend = finish;
+    utterance.onerror = (e) => {
+      console.warn('Speech synthesis utterance error:', e);
+      finish();
+    };
+
+    // Safety timeout in case browser drops speech onend event (Chromium edge cases)
+    const charCount = text.length;
+    const estimatedDurationMs = Math.max(2500, (charCount / 8) * 1000 + 2000);
+    const timeoutId = setTimeout(() => {
+      if (!hasEnded && isCurrentlySpeaking) {
+        finish();
+      }
+    }, estimatedDurationMs);
+
+    utterance.addEventListener('end', () => clearTimeout(timeoutId));
+    utterance.addEventListener('error', () => clearTimeout(timeoutId));
+
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn('SpeechSynthesis speak failed:', err);
+    notifySpeechState(false, '');
+    if (onEnd) onEnd();
+  }
+}
+
+/**
+ * Main Speak Function: Seamlessly uses fastest available source
  */
 export async function speakText(
   text: string,
@@ -178,103 +383,101 @@ export async function speakText(
   }
 
   stopSpeaking();
+  unlockAudioContext();
   const cleanText = text.trim();
-  const audio = getSharedAudio();
 
-  notifySpeechState(true, cleanText);
+  // Step 1: If server TTS is known to be disabled or in static deployment, go straight to Web Speech
+  if (isServerTTSAvailable === false) {
+    speakViaWebSpeech(cleanText, lang, onEnd);
+    return;
+  }
 
   const cacheKey = `${lang}:${cleanText}`;
   let audioUrl = blobCache.get(cacheKey);
 
+  if (!audioUrl && activeFetches.has(cacheKey)) {
+    audioUrl = (await activeFetches.get(cacheKey)) || undefined;
+  }
+
+  // If not cached, attempt to fetch from server proxy
   if (!audioUrl) {
-    // Check if prefetch is in progress
-    if (activeFetches.has(cacheKey)) {
-      audioUrl = (await activeFetches.get(cacheKey)) || undefined;
+    try {
+      const serverAvailable = await checkServerTTS();
+      if (serverAvailable) {
+        audioUrl = await prefetchAudioChunk(cleanText, lang) || undefined;
+      }
+    } catch {
+      isServerTTSAvailable = false;
     }
   }
 
-  // If still not cached, directly stream from API
-  if (!audioUrl) {
-    audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}&lang=${lang}`;
-    // Pre-cache in background for next time
-    prefetchAudioChunk(cleanText, lang);
-  }
+  // If we have a genuine Audio URL from server, play via HTML5 Audio
+  if (audioUrl) {
+    const audio = getSharedAudio();
+    notifySpeechState(true, cleanText);
 
-  try {
-    audio.src = audioUrl;
-    
-    // Attach one-time onended handler
-    const handleEnded = () => {
-      audio.removeEventListener('ended', handleEnded);
-      notifySpeechState(false, '');
-      if (onEnd) onEnd();
-    };
-    audio.addEventListener('ended', handleEnded, { once: true });
+    try {
+      audio.src = audioUrl;
 
-    const playPromise = audio.play();
-    if (playPromise !== undefined) {
-      playPromise.catch((err) => {
-        console.warn('Audio play auto-unlock retry needed:', err);
-        // Fallback to Web Speech if Audio is blocked
-        speakViaWebSpeech(cleanText, lang, onEnd);
-      });
+      const handleEnded = () => {
+        audio.removeEventListener('ended', handleEnded);
+        notifySpeechState(false, '');
+        if (onEnd) onEnd();
+      };
+      audio.addEventListener('ended', handleEnded, { once: true });
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Audio play auto-unlock or format error, fallback to Web Speech:', err);
+          speakViaWebSpeech(cleanText, lang, onEnd);
+        });
+      }
+      return;
+    } catch (err) {
+      console.warn('Audio play execution failed, fallback to Web Speech:', err);
+      speakViaWebSpeech(cleanText, lang, onEnd);
+      return;
     }
-  } catch (err) {
-    console.warn('Speak playback error:', err);
-    speakViaWebSpeech(cleanText, lang, onEnd);
   }
+
+  // Default Fallback: Native Browser Web Speech (guaranteed client-side execution)
+  speakViaWebSpeech(cleanText, lang, onEnd);
 }
 
 /**
- * Native Browser Web Speech Synthesis Fallback
+ * Test Voice Audio Playback for Settings / Diagnostics
  */
-function speakViaWebSpeech(text: string, lang: Language, onEnd?: () => void) {
-  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
-    notifySpeechState(false, '');
-    if (onEnd) onEnd();
-    return;
-  }
+export function testVoicePlayback(lang: Language = 'bn', onEnd?: () => void) {
+  const sampleText =
+    lang === 'bn'
+      ? 'টাইপ শিখো অ্যাপ্লিকেশনে স্বাগতম! আপনার ভয়েস গাইড সফলভাবে চালু রয়েছে।'
+      : 'Welcome to Type Shikho! Your audio voice guidance is fully active and working.';
+  speakText(sampleText, lang, true, onEnd);
+}
 
-  try {
-    const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
+/**
+ * Returns available voice engine information
+ */
+export function getSpeechEngineInfo(lang: Language = 'bn'): {
+  engineType: string;
+  voiceName: string;
+  isBengaliNative: boolean;
+} {
+  const bestVoice = findBestVoice(lang);
+  const isBengali =
+    lang === 'bn' &&
+    bestVoice &&
+    (bestVoice.lang.toLowerCase().includes('bn') ||
+      bestVoice.name.toLowerCase().includes('bangla') ||
+      bestVoice.name.toLowerCase().includes('bengali') ||
+      bestVoice.name.toLowerCase().includes('বাংলা'));
 
-    if (lang === 'bn') {
-      const bnVoice = voices.find(
-        (v) =>
-          v.lang.toLowerCase().startsWith('bn') ||
-          v.name.toLowerCase().includes('bangla') ||
-          v.name.toLowerCase().includes('bengali')
-      );
-      if (bnVoice) {
-        utterance.voice = bnVoice;
-      }
-      utterance.lang = 'bn-BD';
-      utterance.rate = 0.95;
-    } else {
-      const enVoice = voices.find((v) => v.lang.toLowerCase().startsWith('en'));
-      if (enVoice) {
-        utterance.voice = enVoice;
-      }
-      utterance.lang = 'en-US';
-      utterance.rate = 1.0;
-    }
-
-    utterance.onend = () => {
-      notifySpeechState(false, '');
-      if (onEnd) onEnd();
-    };
-
-    utterance.onerror = () => {
-      notifySpeechState(false, '');
-      if (onEnd) onEnd();
-    };
-
-    window.speechSynthesis.speak(utterance);
-  } catch {
-    notifySpeechState(false, '');
-    if (onEnd) onEnd();
-  }
+  return {
+    engineType: isServerTTSAvailable ? 'Server Audio Stream' : 'Browser Web Speech Engine',
+    voiceName: bestVoice ? `${bestVoice.name} (${bestVoice.lang})` : (lang === 'bn' ? 'বাংলা ভয়েস সিন্থেসিস' : 'English Voice'),
+    isBengaliNative: !!isBengali,
+  };
 }
 
 /**

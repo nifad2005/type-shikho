@@ -42,9 +42,9 @@ const INITIAL_USER_STATS: UserStats = {
 };
 
 export default function App() {
-  // Theme setting (light / dark / sepia) - Defaulting to modern pristine light
+  // Theme setting (light / dark / sepia) - Defaulting to dark mode
   const [theme, setTheme] = useState<ThemeMode>(() => {
-    return (localStorage.getItem('typemaster_theme') as ThemeMode) || 'light';
+    return (localStorage.getItem('typemaster_theme') as ThemeMode) || 'dark';
   });
 
   // Language & Sound & Voice settings
