@@ -25,6 +25,7 @@ export type KeyFingerInfo = {
 export interface Lesson {
   id: string;
   moduleId: string;
+  type?: 'typing' | 'game';
   titleEn: string;
   titleBn: string;
   descriptionEn: string;

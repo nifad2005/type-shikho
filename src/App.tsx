@@ -3,27 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
-  AppTab, 
   Language, 
   SoundEffectType, 
   UserStats, 
   Lesson 
 } from './types';
-import { MODULES_DATA, BADGES_DATA } from './utils/keyboardMap';
+import { MODULES_DATA } from './utils/keyboardMap';
 import { Header } from './components/Header';
-import { ModuleList } from './components/ModuleList';
 import { TypingArena } from './components/TypingArena';
-import { MiniGameSkyFall } from './components/MiniGameSkyFall';
+import { ModuleList } from './components/ModuleList';
 import { CustomPracticeArena } from './components/CustomPracticeArena';
-import { BadgeGallery } from './components/BadgeGallery';
 import { SmartPracticeModal } from './components/SmartPracticeModal';
 import { CertificateModal } from './components/CertificateModal';
 import { OnboardingModal } from './components/OnboardingModal';
-import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, ArrowLeft, Award, Flame, CheckCircle2 } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { X, ArrowLeft } from 'lucide-react';
 
 const STORAGE_KEY = 'typemaster_user_data_v1';
 
@@ -44,7 +39,7 @@ const INITIAL_USER_STATS: UserStats = {
 };
 
 export default function App() {
-  // Load saved state
+  // Language & Sound settings
   const [language, setLanguage] = useState<Language>(() => {
     return (localStorage.getItem('typemaster_lang') as Language) || 'bn';
   });
@@ -53,21 +48,12 @@ export default function App() {
     return (localStorage.getItem('typemaster_sound') as SoundEffectType) || 'mechanical';
   });
 
-  const [currentTab, setCurrentTab] = useState<AppTab>('learn');
-  const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
-
-  // Modals state
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
-  const [isSmartModalOpen, setIsSmartModalOpen] = useState<boolean>(false);
-  const [isCertificateOpen, setIsCertificateOpen] = useState<boolean>(false);
-
-  // User Stats with local storage
+  // User stats from localStorage
   const [userStats, setUserStats] = useState<UserStats>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Check daily streak
         const today = new Date().toISOString().split('T')[0];
         const lastDate = parsed.lastActiveDate;
         if (lastDate !== today) {
@@ -82,12 +68,34 @@ export default function App() {
         return parsed;
       }
     } catch {
-      // Fallback
+      // Fallback to initial
     }
     return INITIAL_USER_STATS;
   });
 
-  // Save changes to localStorage
+  // Flat list of all lessons across all modules
+  const allLessons: Lesson[] = useMemo(() => {
+    return MODULES_DATA.flatMap((m) => m.lessons);
+  }, []);
+
+  // Active Lesson (Defaults to the first uncompleted lesson, or Module 1 Lesson 1)
+  const [activeLesson, setActiveLesson] = useState<Lesson>(() => {
+    const savedLessonId = localStorage.getItem('typemaster_active_lesson_id');
+    if (savedLessonId) {
+      const found = allLessons.find((l) => l.id === savedLessonId);
+      if (found) return found;
+    }
+    return MODULES_DATA[0].lessons[0];
+  });
+
+  // Modal / View states
+  const [isCurriculumOpen, setIsCurriculumOpen] = useState<boolean>(false);
+  const [isCustomPracticeOpen, setIsCustomPracticeOpen] = useState<boolean>(false);
+  const [isSmartModalOpen, setIsSmartModalOpen] = useState<boolean>(false);
+  const [isCertificateOpen, setIsCertificateOpen] = useState<boolean>(false);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+
+  // Sync to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userStats));
   }, [userStats]);
@@ -100,7 +108,13 @@ export default function App() {
     localStorage.setItem('typemaster_sound', soundType);
   }, [soundType]);
 
-  // First time visitor onboarding check
+  useEffect(() => {
+    if (activeLesson) {
+      localStorage.setItem('typemaster_active_lesson_id', activeLesson.id);
+    }
+  }, [activeLesson]);
+
+  // First time visitor onboarding
   useEffect(() => {
     const hasSeenOnboarding = localStorage.getItem('typemaster_onboarding_seen');
     if (!hasSeenOnboarding) {
@@ -109,7 +123,26 @@ export default function App() {
     }
   }, []);
 
-  // Handle lesson completion & badge unlocking logic
+  // Navigation helpers
+  const currentLessonIndex = allLessons.findIndex((l) => l.id === activeLesson.id);
+  const hasPrevLesson = currentLessonIndex > 0;
+  const hasNextLesson = currentLessonIndex !== -1 && currentLessonIndex < allLessons.length - 1;
+
+  const handlePrevLesson = () => {
+    if (hasPrevLesson) {
+      setActiveLesson(allLessons[currentLessonIndex - 1]);
+    }
+  };
+
+  const handleNextLesson = () => {
+    if (hasNextLesson) {
+      setActiveLesson(allLessons[currentLessonIndex + 1]);
+    } else {
+      setIsCertificateOpen(true);
+    }
+  };
+
+  // Lesson completion handler
   const handleLessonComplete = useCallback((result: {
     lessonId: string;
     accuracy: number;
@@ -128,57 +161,14 @@ export default function App() {
         },
       };
 
-      const xpEarned = (result.stars * 35) + (result.accuracy >= 98 ? 30 : 15);
+      const xpEarned = (result.stars * 40) + (result.accuracy >= 98 ? 30 : 15);
       const newXp = prev.xp + xpEarned;
       const newLevel = Math.floor(newXp / 250) + 1;
 
-      // Update weak keys mistakes map
+      // Update weak keys map
       const newMistakes = { ...prev.keyMistakes };
       for (const [key, count] of Object.entries(result.mistakes)) {
         newMistakes[key] = (newMistakes[key] || 0) + count;
-      }
-
-      // Check badges to unlock
-      const badgesToUnlock = new Set(prev.unlockedBadges);
-
-      // Badge: First Touch
-      badgesToUnlock.add('first-key');
-
-      // Badge: Pure Accuracy
-      if (result.accuracy === 100) {
-        badgesToUnlock.add('pure-accuracy');
-      }
-
-      // Badge: Speed Demon
-      if (result.wpm >= 40) {
-        badgesToUnlock.add('speed-demon');
-      }
-
-      // Check Module 1 completion
-      const module1Lessons = MODULES_DATA[0].lessons.map((l) => l.id);
-      const m1Finished = module1Lessons.every((id) => updatedCompleted[id]);
-      if (m1Finished) {
-        badgesToUnlock.add('home-row-ninja');
-      }
-
-      // Check Module 2 completion
-      const module2Lessons = MODULES_DATA[1].lessons.map((l) => l.id);
-      const m2Finished = module2Lessons.every((id) => updatedCompleted[id]);
-      if (m2Finished) {
-        badgesToUnlock.add('top-bottom-explorer');
-      }
-
-      // Check Module 3 completion
-      const module3Lessons = MODULES_DATA[2].lessons.map((l) => l.id);
-      const m3Finished = module3Lessons.every((id) => updatedCompleted[id]);
-      if (m3Finished) {
-        badgesToUnlock.add('shift-specialist');
-      }
-
-      // Check all modules completed -> Graduate
-      const totalLessonsCount = MODULES_DATA.reduce((acc, m) => acc + m.lessons.length, 0);
-      if (Object.keys(updatedCompleted).length >= totalLessonsCount) {
-        badgesToUnlock.add('graduate');
       }
 
       return {
@@ -187,143 +177,82 @@ export default function App() {
         level: newLevel,
         completedLessons: updatedCompleted,
         keyMistakes: newMistakes,
-        unlockedBadges: Array.from(badgesToUnlock),
       };
     });
   }, []);
 
-  // Handle Mini Game Skyfall score
-  const handleGameComplete = useCallback((score: number, maxCombo: number) => {
-    setUserStats((prev) => {
-      const xpEarned = Math.floor(score / 5);
-      const newXp = prev.xp + xpEarned;
-      const newLevel = Math.floor(newXp / 250) + 1;
-      const badgesToUnlock = new Set(prev.unlockedBadges);
-
-      if (score >= 300) {
-        badgesToUnlock.add('skyfall-hero');
-      }
-
-      return {
-        ...prev,
-        xp: newXp,
-        level: newLevel,
-        unlockedBadges: Array.from(badgesToUnlock),
-      };
-    });
-  }, []);
-
-  // Navigate to next lesson in sequence
-  const handleNextLesson = () => {
-    if (!activeLesson) return;
-
-    // Find current lesson index in all lessons
-    const allLessons: Lesson[] = MODULES_DATA.flatMap((m) => m.lessons);
-    const currentIndex = allLessons.findIndex((l) => l.id === activeLesson.id);
-
-    if (currentIndex !== -1 && currentIndex + 1 < allLessons.length) {
-      setActiveLesson(allLessons[currentIndex + 1]);
-    } else {
-      // Completed all lessons! Open certificate
-      setIsCertificateOpen(true);
-      setActiveLesson(null);
-    }
+  const toggleSound = () => {
+    setSoundType((prev) => (prev === 'mute' ? 'mechanical' : 'mute'));
   };
 
   const isBn = language === 'bn';
 
   return (
-    <div className="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
-      {/* Top Sticky Navigation */}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+      {/* Clean Minimal Header */}
       <Header
-        currentTab={currentTab}
-        onTabChange={(tab) => {
-          setCurrentTab(tab);
-          setActiveLesson(null);
-        }}
+        currentLesson={activeLesson}
         language={language}
         onLanguageChange={setLanguage}
         soundType={soundType}
-        onSoundChange={setSoundType}
+        onToggleSound={toggleSound}
         userStats={userStats}
-        onOpenOnboarding={() => setIsOnboardingOpen(true)}
-        onOpenSmartModal={() => setIsSmartModalOpen(true)}
+        onOpenCurriculum={() => setIsCurriculumOpen(true)}
+        onOpenCustomPractice={() => setIsCustomPracticeOpen(true)}
+        onOpenSmartDrill={() => setIsSmartModalOpen(true)}
         onOpenCertificate={() => setIsCertificateOpen(true)}
+        onPrevLesson={handlePrevLesson}
+        onNextLesson={handleNextLesson}
+        hasPrevLesson={hasPrevLesson}
+        hasNextLesson={hasNextLesson}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex flex-col">
-        {/* If an active lesson is selected, render TypingArena */}
-        {activeLesson ? (
+      {/* Main Centered Studio */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col justify-center">
+        {isCustomPracticeOpen ? (
           <div className="w-full flex flex-col gap-4">
             <button
-              id="btn-back-to-modules"
-              onClick={() => setActiveLesson(null)}
-              className="self-start px-3.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-emerald-500 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95"
+              onClick={() => setIsCustomPracticeOpen(false)}
+              className="self-start px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold flex items-center gap-1.5 hover:bg-slate-100 transition-all cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>{isBn ? 'পাঠ্যক্রম তালিকায় ফিরে যান' : 'Back to Curriculum'}</span>
+              <span>{isBn ? 'লেসনে ফিরে যান' : 'Back to Lessons'}</span>
             </button>
-
-            <TypingArena
-              lesson={activeLesson}
+            <CustomPracticeArena
               language={language}
               soundType={soundType}
               userStats={userStats}
               onLessonComplete={handleLessonComplete}
-              onNextLesson={handleNextLesson}
-              onSelectAnotherLesson={() => setActiveLesson(null)}
             />
           </div>
         ) : (
-          /* Main Tab Views */
-          <div>
-            {currentTab === 'learn' && (
-              <ModuleList
-                userStats={userStats}
-                language={language}
-                onSelectLesson={(lesson) => setActiveLesson(lesson)}
-              />
-            )}
-
-            {currentTab === 'game' && (
-              <MiniGameSkyFall
-                language={language}
-                soundType={soundType}
-                onGameComplete={handleGameComplete}
-              />
-            )}
-
-            {currentTab === 'custom-test' && (
-              <CustomPracticeArena
-                language={language}
-                soundType={soundType}
-                userStats={userStats}
-                onLessonComplete={handleLessonComplete}
-              />
-            )}
-
-            {currentTab === 'badges' && (
-              <BadgeGallery
-                userStats={userStats}
-                language={language}
-              />
-            )}
-          </div>
+          <TypingArena
+            lesson={activeLesson}
+            language={language}
+            soundType={soundType}
+            userStats={userStats}
+            onLessonComplete={handleLessonComplete}
+            onNextLesson={handleNextLesson}
+            onSelectAnotherLesson={() => setIsCurriculumOpen(true)}
+          />
         )}
       </main>
 
-      {/* Modals */}
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={() => setIsOnboardingOpen(false)}
-        onStartBeginner={() => {
-          setIsOnboardingOpen(false);
-          setActiveLesson(MODULES_DATA[0].lessons[0]);
-        }}
-        language={language}
-      />
+      {/* Curriculum Roadmap Modal */}
+      {isCurriculumOpen && (
+        <ModuleList
+          userStats={userStats}
+          language={language}
+          currentLessonId={activeLesson.id}
+          onSelectLesson={(lesson) => {
+            setActiveLesson(lesson);
+            setIsCustomPracticeOpen(false);
+          }}
+          onClose={() => setIsCurriculumOpen(false)}
+        />
+      )}
 
+      {/* Smart Weak Key Analyzer Modal */}
       <SmartPracticeModal
         isOpen={isSmartModalOpen}
         onClose={() => setIsSmartModalOpen(false)}
@@ -331,9 +260,12 @@ export default function App() {
         language={language}
         onStartCustomDrill={(customLesson) => {
           setActiveLesson(customLesson);
+          setIsCustomPracticeOpen(false);
+          setIsSmartModalOpen(false);
         }}
       />
 
+      {/* Certificate Modal */}
       <CertificateModal
         isOpen={isCertificateOpen}
         onClose={() => setIsCertificateOpen(false)}
@@ -342,6 +274,17 @@ export default function App() {
         onUpdateUserName={(name) => {
           setUserStats((prev) => ({ ...prev, userName: name }));
         }}
+      />
+
+      {/* Onboarding Tutorial Modal */}
+      <OnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        onStartBeginner={() => {
+          setIsOnboardingOpen(false);
+          setActiveLesson(MODULES_DATA[0].lessons[0]);
+        }}
+        language={language}
       />
     </div>
   );

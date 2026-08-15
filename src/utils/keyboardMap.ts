@@ -247,7 +247,7 @@ export function getKeyInfoForChar(char: string): KeyFingerInfo {
   };
 }
 
-// Full curriculum of guided modules
+// Full curriculum of guided modules with integrated Checkpoint Games
 export const MODULES_DATA: Module[] = [
   {
     id: 'module-1',
@@ -262,6 +262,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm1-l1',
         moduleId: 'module-1',
+        type: 'typing',
         titleEn: '1. Index Finger Anchors: F & J',
         titleBn: '১. তর্জনীর ভিত্তি: F ও J',
         descriptionEn: 'Feel the small bump on keys F & J. Left index on F, Right index on J.',
@@ -274,6 +275,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm1-l2',
         moduleId: 'module-1',
+        type: 'typing',
         titleEn: '2. Middle Fingers: D & K',
         titleBn: '২. মধ্যমার স্পর্শ: D ও K',
         descriptionEn: 'Left middle finger rests on D, right middle finger rests on K.',
@@ -286,6 +288,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm1-l3',
         moduleId: 'module-1',
+        type: 'typing',
         titleEn: '3. Ring Fingers: S & L',
         titleBn: '৩. অনামিকার অবস্থান: S ও L',
         descriptionEn: 'Left ring finger on S, right ring finger on L.',
@@ -298,6 +301,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm1-l4',
         moduleId: 'module-1',
+        type: 'typing',
         titleEn: '4. Pinky Fingers: A & ;',
         titleBn: '৪. কনিষ্ঠার নিয়ন্ত্রণ: A ও ;',
         descriptionEn: 'Left pinky rests on A, right pinky rests on semicolon (;).',
@@ -310,6 +314,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm1-l5',
         moduleId: 'module-1',
+        type: 'typing',
         titleEn: '5. Home Row Fluency Drill',
         titleBn: '৫. হোম রো কম্বিনেশন ড্রিল',
         descriptionEn: 'Practice all 8 home row keys together in smooth rhythm without looking down.',
@@ -322,6 +327,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm1-l6',
         moduleId: 'module-1',
+        type: 'typing',
         titleEn: '6. Home Row Real Words & Sentences',
         titleBn: '৬. হোম রো দিয়ে তৈরি অর্থপূর্ণ শব্দ',
         descriptionEn: 'Type real English words using solely the home row keys.',
@@ -330,6 +336,19 @@ export const MODULES_DATA: Module[] = [
         targetText: 'all fall glad flask salad asks dads lads fall all glad salad asks lads',
         targetAccuracy: 95,
         xpReward: 100,
+      },
+      {
+        id: 'm1-game',
+        moduleId: 'module-1',
+        type: 'game',
+        titleEn: '🎮 Checkpoint: Home Row Sky Fall Challenge',
+        titleBn: '🎮 মডিউল ১ চ্যালেঞ্জ: হোম রো স্কাইফল গেম',
+        descriptionEn: 'Defend against falling home row letters and words in real-time reflex mode!',
+        descriptionBn: 'হোম রো-এর পড়া অক্ষর মাটিতে পড়ার আগেই দ্রুত টাইপ করে ধ্বংস করুন!',
+        keysIntroduced: ['a', 's', 'd', 'f', 'j', 'k', 'l', ';'],
+        targetText: 'game-mode-home',
+        targetAccuracy: 90,
+        xpReward: 150,
       },
     ],
   },
@@ -346,6 +365,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm2-l1',
         moduleId: 'module-2',
+        type: 'typing',
         titleEn: '1. Top Row: E & I Reach',
         titleBn: '১. টপ রো: E ও I স্পর্শ',
         descriptionEn: 'Left middle reaches up from D to E. Right middle reaches up from K to I.',
@@ -358,6 +378,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm2-l2',
         moduleId: 'module-2',
+        type: 'typing',
         titleEn: '2. Top Row: R & U Reach',
         titleBn: '২. টপ রো: R ও U স্পর্শ',
         descriptionEn: 'Left index reaches up from F to R. Right index reaches up from J to U.',
@@ -370,6 +391,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm2-l3',
         moduleId: 'module-2',
+        type: 'typing',
         titleEn: '3. Top Row: T & Y Extension',
         titleBn: '৩. টপ রো: T ও Y প্রসারিত করা',
         descriptionEn: 'Left index reaches up-right to T. Right index reaches up-left to Y.',
@@ -382,6 +404,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm2-l4',
         moduleId: 'module-2',
+        type: 'typing',
         titleEn: '4. Top Row: W, O, Q, P Wings',
         titleBn: '৪. টপ রো: W, O, Q ও P কভার করা',
         descriptionEn: 'Left ring to W, Left pinky to Q. Right ring to O, Right pinky to P.',
@@ -394,6 +417,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm2-l5',
         moduleId: 'module-2',
+        type: 'typing',
         titleEn: '5. Bottom Row: C, V, M, N Discovery',
         titleBn: '৫. বটম রো: C, V, M ও N আয়ত্ত করা',
         descriptionEn: 'Left middle to C, left index to V. Right index to M and N.',
@@ -406,6 +430,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm2-l6',
         moduleId: 'module-2',
+        type: 'typing',
         titleEn: '6. Bottom Row: Z, X, B & Punctuation Marks',
         titleBn: '৬. বটম রো: Z, X, B, কমা ও ফুলস্টপ',
         descriptionEn: 'Left pinky to Z, left ring to X, left index to B. Right middle to comma, right ring to period.',
@@ -414,6 +439,19 @@ export const MODULES_DATA: Module[] = [
         targetText: 'aza sxs fbf k,k l.l zero box blue best zoom next scan calm, fine. good, best.',
         targetAccuracy: 95,
         xpReward: 130,
+      },
+      {
+        id: 'm2-game',
+        moduleId: 'module-2',
+        type: 'game',
+        titleEn: '🎮 Checkpoint: Top & Bottom Sky Fall Challenge',
+        titleBn: '🎮 মডিউল ২ চ্যালেঞ্জ: টপ ও বটম স্কাইফল গেম',
+        descriptionEn: 'Test your top and bottom reaches in rapid falling reflex action!',
+        descriptionBn: 'টপ এবং বটম রো-এর দ্রুত গতির রিফ্লেক্স চ্যালেঞ্জ!',
+        keysIntroduced: ['e', 'r', 'u', 'i', 'c', 'v', 'm', 'n'],
+        targetText: 'game-mode-top_bottom',
+        targetAccuracy: 90,
+        xpReward: 160,
       },
     ],
   },
@@ -430,6 +468,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm3-l1',
         moduleId: 'module-3',
+        type: 'typing',
         titleEn: '1. Left Shift for Right Hand Keys',
         titleBn: '১. ডান হাতের অক্ষরের জন্য বাম শিফট',
         descriptionEn: 'Hold Left Shift with left pinky while right hand types J, K, L, U, I, O, P, M, N.',
@@ -442,6 +481,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm3-l2',
         moduleId: 'module-3',
+        type: 'typing',
         titleEn: '2. Right Shift for Left Hand Keys',
         titleBn: '২. বাম হাতের অক্ষরের জন্য ডান শিফট',
         descriptionEn: 'Hold Right Shift with right pinky while left hand types F, D, S, A, R, E, W, Q, C, V, B.',
@@ -454,6 +494,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm3-l3',
         moduleId: 'module-3',
+        type: 'typing',
         titleEn: '3. Full Sentences with Proper Punctuation',
         titleBn: '৩. বিরামচিহ্নসহ সম্পূর্ণ বাক্য',
         descriptionEn: 'Practice real full English sentences with capitals, periods, commas, and question marks.',
@@ -462,6 +503,19 @@ export const MODULES_DATA: Module[] = [
         targetText: 'Practice makes perfect. Never look down at the keyboard! Are you ready? Yes, I am!',
         targetAccuracy: 95,
         xpReward: 140,
+      },
+      {
+        id: 'm3-game',
+        moduleId: 'module-3',
+        type: 'game',
+        titleEn: '🎮 Checkpoint: Capital & Shift Rush Game',
+        titleBn: '🎮 মডিউল ৩ চ্যালেঞ্জ: শিফট ও ক্যাপিটাল স্পিড গেম',
+        descriptionEn: 'Quickly trigger shift keys and uppercase words before time runs out!',
+        descriptionBn: 'দ্রুত শিফট চেপে ক্যাপিটাল লেটার টাইপ করার রিফ্লেক্স টেস্ট!',
+        keysIntroduced: ['Shift', 'Capitals'],
+        targetText: 'game-mode-all',
+        targetAccuracy: 90,
+        xpReward: 170,
       },
     ],
   },
@@ -478,6 +532,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm4-l1',
         moduleId: 'module-4',
+        type: 'typing',
         titleEn: '1. Number Row Mastery: 1, 2, 3, 4, 5',
         titleBn: '১. বাম হাতের সংখ্যা: ১, ২, ৩, ৪, ৫',
         descriptionEn: 'Left pinky 1, ring 2, middle 3, index 4 and 5.',
@@ -490,6 +545,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm4-l2',
         moduleId: 'module-4',
+        type: 'typing',
         titleEn: '2. Number Row Mastery: 6, 7, 8, 9, 0',
         titleBn: '২. ডান হাতের সংখ্যা: ৬, ৭, ৮, ৯, ০',
         descriptionEn: 'Right index 6 and 7, middle 8, ring 9, pinky 0.',
@@ -502,6 +558,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm4-l3',
         moduleId: 'module-4',
+        type: 'typing',
         titleEn: '3. Developer & Everyday Symbols',
         titleBn: '৩. গুরুত্বপূর্ণ স্পেশাল সিম্বল',
         descriptionEn: 'Shift + numbers for @, #, $, %, &, *, (, ), -, +, =.',
@@ -510,6 +567,19 @@ export const MODULES_DATA: Module[] = [
         targetText: 'user@email.com #100 $50 100% (item & total) 10 + 20 = 30 [test] {key: val}',
         targetAccuracy: 94,
         xpReward: 150,
+      },
+      {
+        id: 'm4-game',
+        moduleId: 'module-4',
+        type: 'game',
+        titleEn: '🎮 Checkpoint: Numbers & Symbols Defense',
+        titleBn: '🎮 মডিউল ৪ চ্যালেঞ্জ: নাম্বার ও সিম্বল ডিফেন্স গেম',
+        descriptionEn: 'Sharpen your numeric and coding key reflexes!',
+        descriptionBn: 'সংখ্যা ও স্পেশাল সিম্বলের দ্রুত টাইপিং গেম!',
+        keysIntroduced: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+        targetText: 'game-mode-all',
+        targetAccuracy: 90,
+        xpReward: 180,
       },
     ],
   },
@@ -526,6 +596,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm5-l1',
         moduleId: 'module-5',
+        type: 'typing',
         titleEn: '1. The Power of Muscle Memory',
         titleBn: '১. পেশীর স্মৃতির জাদু (Muscle Memory)',
         descriptionEn: 'A smooth inspirational paragraph on building unconscious typing reflex.',
@@ -538,6 +609,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm5-l2',
         moduleId: 'module-5',
+        type: 'typing',
         titleEn: '2. Proverb & Wisdom Fluency',
         titleBn: '২. জ্ঞান ও প্রবাদের চর্চা',
         descriptionEn: 'Classic timeless proverbs to train cadence and rhythm.',
@@ -550,6 +622,7 @@ export const MODULES_DATA: Module[] = [
       {
         id: 'm5-l3',
         moduleId: 'module-5',
+        type: 'typing',
         titleEn: '3. Grandmaster Speed Run',
         titleBn: '৩. গ্র্যান্ডমাস্টার টাইপিং টেস্ট',
         descriptionEn: 'The ultimate graduation text to earn your Master Typist Certificate!',
@@ -558,6 +631,19 @@ export const MODULES_DATA: Module[] = [
         targetText: 'Congratulations on reaching the final frontier! By maintaining home row discipline, respecting every finger zone, and prioritizing accuracy above raw speed, you have mastered the art of touch typing.',
         targetAccuracy: 97,
         xpReward: 250,
+      },
+      {
+        id: 'm5-game',
+        moduleId: 'module-5',
+        type: 'game',
+        titleEn: '🎮 Grand Finale: Sky Fall Master Game',
+        titleBn: '🎮 গ্র্যান্ড ফাইনাল: স্কাইফল মাস্টার গেম',
+        descriptionEn: 'The ultimate typing reflex test before graduation!',
+        descriptionBn: 'কোর্স গ্র্যাজুয়েশনের আগে চূড়ান্ত স্পিড ও রিফ্লেক্স টেস্ট!',
+        keysIntroduced: ['All Keys'],
+        targetText: 'game-mode-all',
+        targetAccuracy: 90,
+        xpReward: 300,
       },
     ],
   },

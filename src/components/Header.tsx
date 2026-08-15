@@ -1,195 +1,205 @@
-import React from 'react';
-import { AppTab, Language, SoundEffectType, UserStats } from '../types';
+import React, { useState } from 'react';
+import { Language, SoundEffectType, UserStats, Lesson } from '../types';
 import { 
   Keyboard, 
-  Gamepad2, 
+  Volume2, 
+  VolumeX, 
+  Globe, 
+  BookOpen, 
   Award, 
   BrainCircuit, 
   FileText, 
-  Volume2, 
-  VolumeX, 
-  Flame, 
-  Globe, 
-  HelpCircle, 
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X,
   Sparkles,
-  BookOpen
+  Gamepad2
 } from 'lucide-react';
 
 interface HeaderProps {
-  currentTab: AppTab;
-  onTabChange: (tab: AppTab) => void;
+  currentLesson: Lesson | null;
   language: Language;
   onLanguageChange: (lang: Language) => void;
   soundType: SoundEffectType;
-  onSoundChange: (sound: SoundEffectType) => void;
+  onToggleSound: () => void;
   userStats: UserStats;
-  onOpenOnboarding: () => void;
-  onOpenSmartModal: () => void;
+  onOpenCurriculum: () => void;
+  onOpenCustomPractice: () => void;
+  onOpenSmartDrill: () => void;
   onOpenCertificate: () => void;
+  onPrevLesson: () => void;
+  onNextLesson: () => void;
+  hasPrevLesson: boolean;
+  hasNextLesson: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  currentTab,
-  onTabChange,
+  currentLesson,
   language,
   onLanguageChange,
   soundType,
-  onSoundChange,
+  onToggleSound,
   userStats,
-  onOpenOnboarding,
-  onOpenSmartModal,
+  onOpenCurriculum,
+  onOpenCustomPractice,
+  onOpenSmartDrill,
   onOpenCertificate,
+  onPrevLesson,
+  onNextLesson,
+  hasPrevLesson,
+  hasNextLesson,
 }) => {
   const isBn = language === 'bn';
-
-  const navTabs: { id: AppTab; labelBn: string; labelEn: string; icon: React.ReactNode }[] = [
-    { id: 'learn', labelBn: 'মডিউল পাঠ্যক্রম', labelEn: 'Curriculum', icon: <BookOpen className="w-4 h-4" /> },
-    { id: 'game', labelBn: 'শব্দ বৃষ্টি গেম', labelEn: 'Sky Fall Game', icon: <Gamepad2 className="w-4 h-4" /> },
-    { id: 'custom-test', labelBn: 'ফ্রি প্র্যাকটিস', labelEn: 'Free Practice', icon: <FileText className="w-4 h-4" /> },
-    { id: 'badges', labelBn: 'ব্যাজ ও অর্জন', labelEn: 'Badges', icon: <Award className="w-4 h-4" /> },
-  ];
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <header className="w-full bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-40 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex flex-col md:flex-row items-center justify-between gap-3">
-        {/* Brand & Stats */}
-        <div className="w-full md:w-auto flex items-center justify-between gap-3">
-          <div
-            onClick={() => onTabChange('learn')}
-            className="flex items-center gap-2.5 cursor-pointer group select-none"
-          >
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-              <Keyboard className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-black text-base sm:text-lg tracking-tight text-slate-900 dark:text-white">
-                  TypeMaster
-                </span>
-                <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-                  {isBn ? 'একাডেমি' : 'Academy'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium hidden sm:block">
-                {isBn ? 'শূন্য থেকে নির্ভুল টাচ টাইপিং' : 'Guided Muscle Memory Touch Typing'}
-              </p>
-            </div>
+    <header className="w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40">
+      <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center justify-between gap-2">
+        {/* Left: Clean Brand */}
+        <div 
+          onClick={onOpenCurriculum}
+          className="flex items-center gap-2 cursor-pointer select-none group"
+          title={isBn ? 'পাঠ্যক্রম ম্যাপ দেখুন' : 'View Curriculum'}
+        >
+          <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs group-hover:bg-teal-500 transition-colors">
+            <Keyboard className="w-4 h-4" />
           </div>
-
-          {/* Quick Stats on Mobile/Top Bar */}
-          <div className="flex items-center gap-2 font-mono text-xs">
-            {/* Daily Streak */}
-            <div
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-900/60 text-amber-700 dark:text-amber-300 font-bold"
-              title={isBn ? `${userStats.streakDays} দিন নিয়মিত অনুশীলন` : `${userStats.streakDays} Days Daily Streak`}
-            >
-              <Flame className="w-3.5 h-3.5 text-amber-500 fill-amber-500 animate-pulse" />
-              <span>{userStats.streakDays}</span>
-            </div>
-
-            {/* Level & XP */}
-            <div
-              className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200/80 dark:border-purple-900/60 text-purple-700 dark:text-purple-300 font-bold cursor-pointer hover:bg-purple-100 transition-colors"
-              onClick={() => onTabChange('badges')}
-              title={isBn ? 'লেভেল ও অর্জিত পয়েন্ট' : 'XP & Level'}
-            >
-              <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-              <span>Lv.{userStats.level}</span>
-            </div>
+          <div>
+            <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
+              TypeMaster
+            </span>
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <nav className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-2xl overflow-x-auto max-w-full">
-          {navTabs.map((tab) => {
-            const isActive = currentTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`tab-${tab.id}`}
-                onClick={() => onTabChange(tab.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all whitespace-nowrap cursor-pointer ${
-                  isActive
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
-                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                {tab.icon}
-                <span>{isBn ? tab.labelBn : tab.labelEn}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Right Tools: Smart Drill, Certificate, Sound, Lang, Onboarding */}
-        <div className="flex items-center gap-2">
-          {/* Smart Repetition Weak Key Button */}
-          <button
-            id="btn-open-smart-drill"
-            onClick={onOpenSmartModal}
-            title={isBn ? 'স্মার্ট দুর্বলতা অ্যানালাইজার' : 'Smart Weak Key Analyzer'}
-            className="p-2 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200 dark:border-cyan-800/60 text-cyan-700 dark:text-cyan-300 hover:bg-cyan-100 transition-all flex items-center gap-1 text-xs font-bold"
-          >
-            <BrainCircuit className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-            <span className="hidden lg:inline">{isBn ? 'স্মার্ট ড্রিল' : 'Smart Drill'}</span>
-          </button>
-
-          {/* Certificate Diploma button */}
-          <button
-            id="btn-open-certificate"
-            onClick={onOpenCertificate}
-            title={isBn ? 'সার্টিফিকেট দেখুন' : 'View Certificate'}
-            className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 hover:bg-amber-100 transition-all flex items-center gap-1 text-xs font-bold"
-          >
-            <Award className="w-4 h-4 text-amber-500" />
-            <span className="hidden lg:inline">{isBn ? 'সার্টিফিকেট' : 'Certificate'}</span>
-          </button>
-
-          {/* Sound Switcher */}
-          <div className="relative group">
+        {/* Center: Minimalist Lesson Navigator */}
+        {currentLesson && (
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/90 p-1 rounded-xl">
             <button
-              title={isBn ? `সাউন্ড মোড: ${soundType}` : `Sound: ${soundType}`}
-              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 transition-all"
+              id="nav-prev-lesson"
+              onClick={onPrevLesson}
+              disabled={!hasPrevLesson}
+              title={isBn ? 'পূর্ববর্তী লেসন' : 'Previous Lesson'}
+              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent transition-all cursor-pointer"
             >
-              {soundType === 'mute' ? <VolumeX className="w-4 h-4 text-slate-400" /> : <Volume2 className="w-4 h-4 text-emerald-500" />}
+              <ChevronLeft className="w-4 h-4" />
             </button>
-            <div className="absolute right-0 top-full mt-1.5 hidden group-hover:flex flex-col gap-1 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 text-xs min-w-[130px]">
-              {(['mechanical', 'typewriter', 'retro', 'gentle', 'mute'] as SoundEffectType[]).map((st) => (
-                <button
-                  key={st}
-                  onClick={() => onSoundChange(st)}
-                  className={`px-2.5 py-1.5 rounded-lg text-left capitalize font-semibold transition-colors ${
-                    soundType === st
-                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  {st}
-                </button>
-              ))}
-            </div>
+
+            <button
+              id="btn-current-lesson-dropdown"
+              onClick={onOpenCurriculum}
+              className="px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 flex items-center gap-1.5 transition-colors cursor-pointer max-w-[200px] sm:max-w-[280px] truncate"
+            >
+              {currentLesson.type === 'game' ? (
+                <Gamepad2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              ) : (
+                <BookOpen className="w-3.5 h-3.5 text-teal-600 shrink-0" />
+              )}
+              <span className="truncate">
+                {isBn ? currentLesson.titleBn : currentLesson.titleEn}
+              </span>
+            </button>
+
+            <button
+              id="nav-next-lesson"
+              onClick={onNextLesson}
+              disabled={!hasNextLesson}
+              title={isBn ? 'পরবর্তী লেসন' : 'Next Lesson'}
+              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent transition-all cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
+        )}
 
-          {/* Language Switcher */}
+        {/* Right: Quick Controls */}
+        <div className="flex items-center gap-1.5">
+          {/* Sound Toggle (1 click) */}
           <button
-            id="btn-language-toggle"
+            id="btn-sound-toggle"
+            onClick={onToggleSound}
+            title={soundType === 'mute' ? (isBn ? 'সাউন্ড অন করুন' : 'Unmute') : (isBn ? 'সাউন্ড মিউট করুন' : 'Mute')}
+            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+          >
+            {soundType === 'mute' ? (
+              <VolumeX className="w-4 h-4 text-slate-400" />
+            ) : (
+              <Volume2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            )}
+          </button>
+
+          {/* Language Switch */}
+          <button
+            id="btn-lang-toggle"
             onClick={() => onLanguageChange(language === 'bn' ? 'en' : 'bn')}
-            className="px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all"
-            title="Switch Language / ভাষা পরিবর্তন"
+            className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 transition-colors cursor-pointer"
+            title="বাংলা / English"
           >
-            <Globe className="w-3.5 h-3.5 text-slate-500" />
-            <span>{language === 'bn' ? 'EN' : 'বাংলা'}</span>
+            <Globe className="w-3.5 h-3.5 text-slate-400" />
+            <span>{language === 'bn' ? 'EN' : 'বাং'}</span>
           </button>
 
-          {/* Tutorial / Help Icon */}
+          {/* All Lessons Curriculum Roadmap Button */}
           <button
-            id="btn-open-tutorial"
-            onClick={onOpenOnboarding}
-            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all"
-            title={isBn ? 'টিউটোরিয়াল ও গাইড' : 'Interactive Tutorial'}
+            id="btn-open-curriculum"
+            onClick={onOpenCurriculum}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 text-xs font-bold transition-all cursor-pointer"
           >
-            <HelpCircle className="w-4 h-4" />
+            <BookOpen className="w-3.5 h-3.5" />
+            <span>{isBn ? 'সকল লেসন' : 'Curriculum'}</span>
           </button>
+
+          {/* Extra Options Menu (Dropdown) */}
+          <div className="relative">
+            <button
+              id="btn-more-options"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              title={isBn ? 'অতিরিক্ত অপশন' : 'More Options'}
+            >
+              {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+
+            {isMenuOpen && (
+              <div 
+                className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-1.5 z-50 flex flex-col gap-1 text-xs font-semibold"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <button
+                  onClick={onOpenCurriculum}
+                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                >
+                  <BookOpen className="w-4 h-4 text-teal-600" />
+                  <span>{isBn ? 'লেসন পাঠ্যক্রম' : 'Lesson Curriculum'}</span>
+                </button>
+
+                <button
+                  onClick={onOpenCustomPractice}
+                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <span>{isBn ? 'ফ্রি প্র্যাকটিস' : 'Free Practice'}</span>
+                </button>
+
+                <button
+                  onClick={onOpenSmartDrill}
+                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                >
+                  <BrainCircuit className="w-4 h-4 text-purple-600" />
+                  <span>{isBn ? 'দুর্বল কি অ্যানালাইজার' : 'Weak Key Analyzer'}</span>
+                </button>
+
+                <button
+                  onClick={onOpenCertificate}
+                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                >
+                  <Award className="w-4 h-4 text-amber-500" />
+                  <span>{isBn ? 'সার্টিফিকেট' : 'Certificate'}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </header>

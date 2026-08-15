@@ -1,25 +1,21 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Lesson, Language, SoundEffectType, UserStats, KeyFingerInfo } from '../types';
 import { getKeyInfoForChar } from '../utils/keyboardMap';
-import { playKeySound, playErrorSound, playSuccessSound, playCelebrationFanfare } from '../utils/audio';
+import { playKeySound, playErrorSound, playCelebrationFanfare } from '../utils/audio';
 import { VirtualHands } from './VirtualHands';
 import { VirtualKeyboard } from './VirtualKeyboard';
+import { MiniGameSkyFall } from './MiniGameSkyFall';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
 import { 
   RotateCcw, 
   ArrowRight, 
-  Award, 
-  CheckCircle2, 
-  AlertCircle, 
-  Flame, 
   Sparkles, 
-  Volume2, 
-  VolumeX, 
-  Zap, 
   Star,
   Target,
-  Trophy
+  Trophy,
+  CheckCircle2,
+  Gamepad2
 } from 'lucide-react';
 
 interface TypingArenaProps {
@@ -42,6 +38,56 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   onSelectAnotherLesson,
 }) => {
   const isBn = language === 'bn';
+
+  // If this is a Game Checkpoint Lesson
+  if (lesson.type === 'game') {
+    return (
+      <div className="w-full max-w-4xl mx-auto flex flex-col items-center gap-4 py-2">
+        <div className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+              <Gamepad2 className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                {isBn ? lesson.titleBn : lesson.titleEn}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {isBn ? lesson.descriptionBn : lesson.descriptionEn}
+              </p>
+            </div>
+          </div>
+          {onSelectAnotherLesson && (
+            <button
+              onClick={onSelectAnotherLesson}
+              className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+            >
+              {isBn ? 'অন্য লেসন' : 'All Lessons'}
+            </button>
+          )}
+        </div>
+
+        <MiniGameSkyFall
+          language={language}
+          soundType={soundType}
+          moduleId={lesson.moduleId}
+          onGameComplete={(score, maxCombo) => {
+            const stars = score >= 200 ? 3 : score >= 100 ? 2 : 1;
+            onLessonComplete({
+              lessonId: lesson.id,
+              accuracy: 95,
+              wpm: Math.min(60, Math.floor(score / 8)),
+              stars,
+              mistakes: {},
+            });
+          }}
+          onNextLesson={onNextLesson}
+        />
+      </div>
+    );
+  }
+
+  // Standard Guided Typing Lesson
   const targetText = lesson.targetText;
 
   // Typing state
@@ -50,27 +96,22 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   const [endTime, setEndTime] = useState<number | null>(null);
   const [errorIndices, setErrorIndices] = useState<Set<number>>(new Set());
   const [combo, setCombo] = useState<number>(0);
-  const [maxCombo, setMaxCombo] = useState<number>(0);
   const [mistakesMap, setMistakesMap] = useState<Record<string, number>>({});
   const [lastPressedKey, setLastPressedKey] = useState<string | null>(null);
   const [isLastKeyError, setIsLastKeyError] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
 
-  // Settings
-  const [strictMode, setStrictMode] = useState<boolean>(false);
-
-  // Focus keeper invisible textarea
+  // Hidden focus textarea
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const textContainerRef = useRef<HTMLDivElement>(null);
 
-  // Reset when lesson changes
+  // Reset function
   const resetPractice = useCallback(() => {
     setTypedInput('');
     setStartTime(null);
     setEndTime(null);
     setErrorIndices(new Set());
     setCombo(0);
-    setMaxCombo(0);
     setMistakesMap({});
     setLastPressedKey(null);
     setIsLastKeyError(false);
@@ -84,7 +125,7 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
     resetPractice();
   }, [lesson.id, resetPractice]);
 
-  // Focus input automatically on click / mount
+  // Keep focus on input
   useEffect(() => {
     const timer = setTimeout(() => {
       inputRef.current?.focus();
@@ -106,16 +147,31 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   const wordsTyped = totalTyped / 5;
   const liveWpm = elapsedMinutes > 0.02 ? Math.round(wordsTyped / elapsedMinutes) : 0;
 
+  // Global Keyboard Shortcuts (Esc to restart, Enter on complete to continue)
+  useEffect(() => {
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        resetPractice();
+      }
+      if (e.key === 'Enter' && isCompleted && onNextLesson) {
+        e.preventDefault();
+        setIsCompleted(false);
+        onNextLesson();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [isCompleted, onNextLesson, resetPractice]);
+
   // Handle Keystrokes
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (isCompleted) return;
 
-    // Ignore modifier standalone keys
     if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) {
       return;
     }
 
-    // Handle Backspace
     if (e.key === 'Backspace') {
       if (typedInput.length > 0) {
         setTypedInput((prev) => prev.slice(0, -1));
@@ -127,13 +183,12 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
       return;
     }
 
-    if (e.key.length !== 1) return; // Only process single character keys
+    if (e.key.length !== 1) return;
 
     e.preventDefault();
     const pressedChar = e.key;
     const expectedChar = targetText[currentIndex];
 
-    // Start timer on first keypress
     if (!startTime) {
       setStartTime(Date.now());
     }
@@ -143,12 +198,9 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
     const isMatch = pressedChar === expectedChar;
 
     if (isMatch) {
-      // Correct keystroke
       setIsLastKeyError(false);
       playKeySound(soundType, pressedChar === ' ');
-      const newCombo = combo + 1;
-      setCombo(newCombo);
-      setMaxCombo((prev) => Math.max(prev, newCombo));
+      setCombo((c) => c + 1);
 
       const newTyped = typedInput + pressedChar;
       setTypedInput(newTyped);
@@ -164,7 +216,7 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         const finalAccuracy = Math.max(0, Math.round(((targetText.length - errorIndices.size) / targetText.length) * 100));
 
         let stars = 1;
-        if (finalAccuracy >= 98 && finalWpm >= (lesson.minWpm || 20)) {
+        if (finalAccuracy >= 98) {
           stars = 3;
         } else if (finalAccuracy >= 94) {
           stars = 2;
@@ -172,8 +224,8 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
 
         playCelebrationFanfare();
         confetti({
-          particleCount: 80,
-          spread: 70,
+          particleCount: 70,
+          spread: 60,
           origin: { y: 0.6 },
         });
 
@@ -186,52 +238,48 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         });
       }
     } else {
-      // Incorrect keystroke
+      // Mistake
       setIsLastKeyError(true);
       playErrorSound(soundType);
       setCombo(0);
 
-      // Track weak key mistake
       setMistakesMap((prev) => ({
         ...prev,
         [expectedChar]: (prev[expectedChar] || 0) + 1,
       }));
 
-      // Record error index
       setErrorIndices((prev) => new Set(prev).add(currentIndex));
 
-      if (!strictMode) {
-        // If not strict mode, advance with error
-        const newTyped = typedInput + pressedChar;
-        setTypedInput(newTyped);
+      // Advance with mistake recorded
+      const newTyped = typedInput + pressedChar;
+      setTypedInput(newTyped);
 
-        if (newTyped.length === targetText.length) {
-          const finishTime = Date.now();
-          setEndTime(finishTime);
-          setIsCompleted(true);
-          const totalMinutes = (finishTime - (startTime || finishTime)) / 60000;
-          const finalWpm = totalMinutes > 0 ? Math.round((targetText.length / 5) / totalMinutes) : 20;
-          const finalAccuracy = Math.max(0, Math.round(((targetText.length - (errorIndices.size + 1)) / targetText.length) * 100));
+      if (newTyped.length === targetText.length) {
+        const finishTime = Date.now();
+        setEndTime(finishTime);
+        setIsCompleted(true);
+        const totalMinutes = (finishTime - (startTime || finishTime)) / 60000;
+        const finalWpm = totalMinutes > 0 ? Math.round((targetText.length / 5) / totalMinutes) : 20;
+        const finalAccuracy = Math.max(0, Math.round(((targetText.length - (errorIndices.size + 1)) / targetText.length) * 100));
 
-          let stars = finalAccuracy >= 95 ? 2 : 1;
-          onLessonComplete({
-            lessonId: lesson.id,
-            accuracy: finalAccuracy,
-            wpm: finalWpm,
-            stars,
-            mistakes: {
-              ...mistakesMap,
-              [expectedChar]: (mistakesMap[expectedChar] || 0) + 1,
-            },
-          });
-        }
+        const stars = finalAccuracy >= 95 ? 2 : 1;
+        onLessonComplete({
+          lessonId: lesson.id,
+          accuracy: finalAccuracy,
+          wpm: finalWpm,
+          stars,
+          mistakes: {
+            ...mistakesMap,
+            [expectedChar]: (mistakesMap[expectedChar] || 0) + 1,
+          },
+        });
       }
     }
   };
 
   return (
-    <div id="typing-arena-container" className="w-full max-w-5xl mx-auto flex flex-col items-center gap-4 py-2">
-      {/* Hidden textarea to capture all keystrokes smoothly */}
+    <div id="typing-arena-container" className="w-full max-w-4xl mx-auto flex flex-col items-center gap-3">
+      {/* Hidden textarea to capture keystrokes smoothly */}
       <textarea
         ref={inputRef}
         value={typedInput}
@@ -242,21 +290,16 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         aria-label="Typing input area"
       />
 
-      {/* Lesson Header Banner */}
-      <div className="w-full flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-            <Target className="w-5 h-5" />
+      {/* Clean Minimal Header Bar */}
+      <div className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold">
+            <Target className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white">
-                {isBn ? lesson.titleBn : lesson.titleEn}
-              </h2>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium">
-                {isBn ? `টার্গেট একুরেসি: ${lesson.targetAccuracy}%` : `Target: ${lesson.targetAccuracy}%`}
-              </span>
-            </div>
+            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+              {isBn ? lesson.titleBn : lesson.titleEn}
+            </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {isBn ? lesson.descriptionBn : lesson.descriptionEn}
             </p>
@@ -264,52 +307,37 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         </div>
 
         {/* Live Gauges */}
-        <div className="flex items-center gap-3 sm:gap-6 font-mono text-xs sm:text-sm">
-          {/* Accuracy % Gauge (Highlighted Primary Metric) */}
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400">
-              {isBn ? 'নির্ভুলতা' : 'Accuracy'}
+        <div className="flex items-center gap-4 sm:gap-6 font-mono text-xs sm:text-sm">
+          {/* Accuracy */}
+          <div className="flex items-baseline gap-1">
+            <span className="text-[11px] uppercase font-bold text-slate-400">
+              {isBn ? 'একুরেসি' : 'Acc'}:
             </span>
             <span
-              className={`font-black text-base sm:text-xl transition-colors ${
-                accuracy >= 98
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : accuracy >= 90
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-amber-500'
+              className={`font-black text-sm sm:text-base ${
+                accuracy >= 95 ? 'text-teal-600 dark:text-teal-400' : 'text-amber-500'
               }`}
             >
               {accuracy}%
             </span>
           </div>
 
-          {/* Live WPM */}
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400">WPM</span>
-            <span className="font-black text-base sm:text-xl text-slate-700 dark:text-slate-200">
+          {/* WPM */}
+          <div className="flex items-baseline gap-1">
+            <span className="text-[11px] uppercase font-bold text-slate-400">WPM:</span>
+            <span className="font-black text-sm sm:text-base text-slate-800 dark:text-slate-200">
               {liveWpm}
             </span>
           </div>
 
-          {/* Combo / Streak */}
-          <div className="flex flex-col items-center">
-            <span className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-0.5">
-              <Flame className={`w-3 h-3 ${combo > 10 ? 'text-amber-500 animate-bounce' : 'text-slate-400'}`} />
-              Combo
-            </span>
-            <span className="font-black text-base sm:text-xl text-amber-500">
-              {combo}
-            </span>
-          </div>
-
-          {/* Reset Button */}
+          {/* Restart Button */}
           <button
             id="btn-restart-lesson"
             onClick={resetPractice}
-            title={isBn ? 'পুনরায় শুরু করুন' : 'Restart Drill'}
-            className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-all active:scale-95"
+            title={isBn ? 'পুনরায় শুরু (Esc)' : 'Restart (Esc)'}
+            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
@@ -319,17 +347,17 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         id="text-stream-box"
         onClick={() => inputRef.current?.focus()}
         ref={textContainerRef}
-        className="w-full min-h-[140px] sm:min-h-[160px] p-6 sm:p-8 bg-slate-50 dark:bg-slate-900/90 border-2 border-slate-200 dark:border-slate-800 rounded-3xl cursor-text relative shadow-inner flex flex-wrap items-center content-start gap-y-2 select-none overflow-hidden transition-all focus-within:border-emerald-500/80"
+        className="w-full min-h-[120px] sm:min-h-[140px] px-6 py-5 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl cursor-text relative flex flex-wrap items-center content-center select-none overflow-hidden transition-all focus-within:border-teal-500"
       >
-        {/* Helper prompt banner when not typing */}
+        {/* Subtle Start Prompt */}
         {!startTime && typedInput.length === 0 && (
-          <div className="absolute top-2 right-4 text-[11px] font-sans font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full flex items-center gap-1.5 animate-pulse">
-            <Sparkles className="w-3.5 h-3.5" />
-            {isBn ? 'টাইপ করা শুরু করলেই টাইমার চালু হবে' : 'Start typing to begin practice'}
+          <div className="absolute top-2 right-3 text-[10px] text-teal-600 dark:text-teal-400 font-semibold bg-teal-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
+            <Sparkles className="w-3 h-3" />
+            <span>{isBn ? 'টাইপ শুরু করুন' : 'Start typing'}</span>
           </div>
         )}
 
-        {/* Render Text stream with letter coloring */}
+        {/* Text Stream */}
         <div className="font-mono text-xl sm:text-2xl md:text-3xl tracking-wider leading-relaxed flex flex-wrap items-center">
           {targetText.split('').map((char, index) => {
             const isTyped = index < typedInput.length;
@@ -342,16 +370,16 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
               if (isError) {
                 charClass = 'text-rose-600 bg-rose-100 dark:bg-rose-950/80 rounded-xs px-0.5';
               } else {
-                charClass = 'text-emerald-600 dark:text-emerald-400 font-semibold';
+                charClass = 'text-teal-600 dark:text-teal-400 font-semibold';
               }
             } else if (isCurrent) {
-              charClass = 'text-slate-900 dark:text-white font-black bg-emerald-500/20 dark:bg-emerald-400/30 rounded-xs px-0.5 underline underline-offset-8 decoration-emerald-500 decoration-4 animate-pulse';
+              charClass = 'text-slate-900 dark:text-white font-black bg-teal-500/20 dark:bg-teal-400/30 rounded-xs px-0.5 underline underline-offset-8 decoration-teal-500 decoration-4 animate-pulse';
             }
 
             return (
               <span key={index} className={`relative transition-all duration-75 ${charClass}`}>
                 {char === ' ' ? (
-                  <span className={`inline-block min-w-[0.6em] ${isCurrent ? 'bg-emerald-500/30 rounded-sm' : ''}`}>
+                  <span className={`inline-block min-w-[0.6em] ${isCurrent ? 'bg-teal-500/30 rounded-sm' : ''}`}>
                     {isCurrent ? '␣' : ' '}
                   </span>
                 ) : (
@@ -363,57 +391,48 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         </div>
       </div>
 
-      {/* Guidance: Visual Hands */}
+      {/* Visual Hands Guide */}
       <VirtualHands
         activeFinger={currentKeyInfo ? currentKeyInfo.finger : null}
         targetKeyDisplay={currentChar}
         language={language}
       />
 
-      {/* Guidance: Virtual Keyboard with highlighted active key */}
+      {/* Virtual Keyboard Guide */}
       <VirtualKeyboard
         targetKeyInfo={currentKeyInfo}
         lastPressedKey={lastPressedKey}
         isErrorKey={isLastKeyError}
       />
 
-      {/* Completion Modal / Overlay */}
+      {/* Completion Modal */}
       <AnimatePresence>
         {isCompleted && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl text-center overflow-hidden"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl text-center"
             >
-              {/* Header Icon */}
-              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30">
-                <Trophy className="w-8 h-8 animate-bounce" />
+              <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+                <Trophy className="w-6 h-6 animate-bounce" />
               </div>
 
-              <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                 {accuracy >= 95
-                  ? isBn
-                    ? 'চমৎকার! লেসন সম্পন্ন হয়েছে'
-                    : 'Brilliant! Lesson Mastered'
-                  : isBn
-                  ? 'ভালো চেষ্টা! আরেকটু অনুশীলন দরকার'
-                  : 'Good Effort! Needs More Accuracy'}
+                  ? (isBn ? 'লেসন সম্পন্ন হয়েছে!' : 'Lesson Mastered!')
+                  : (isBn ? 'অনুশীলন সম্পন্ন' : 'Practice Complete')}
               </h3>
 
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 mb-6">
-                {isBn
-                  ? accuracy >= 95
-                    ? 'আপনি সফলভাবে ৯৫%+ একুরেসি অর্জন করেছেন।'
-                    : 'পরের লেসন আনলক করতে ন্যূনতম ৯৫% একুরেসি প্রয়োজন।'
-                  : accuracy >= 95
-                  ? 'You met the 95%+ accuracy threshold!'
-                  : 'Target 95%+ accuracy to unlock next milestone.'}
+              <p className="text-xs text-slate-500 mt-1 mb-4">
+                {accuracy >= 95
+                  ? (isBn ? 'চমৎকার! আপনি ৯৫%+ নির্ভুলতা বজায় রেখেছেন।' : 'Great accuracy on this drill!')
+                  : (isBn ? 'আরেকবার চেষ্টা করে ৯৫%+ একুরেসি আনুন।' : 'Try again for 95%+ accuracy.')}
               </p>
 
-              {/* Star Rating Display */}
-              <div className="flex justify-center gap-2 mb-6">
+              {/* Star Rating */}
+              <div className="flex justify-center gap-1.5 mb-4">
                 {[1, 2, 3].map((starIndex) => {
                   const isEarned =
                     (accuracy >= 98 && starIndex <= 3) ||
@@ -422,9 +441,9 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
                   return (
                     <Star
                       key={starIndex}
-                      className={`w-8 h-8 ${
+                      className={`w-6 h-6 ${
                         isEarned
-                          ? 'text-amber-400 fill-amber-400 filter drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]'
+                          ? 'text-amber-400 fill-amber-400'
                           : 'text-slate-200 dark:text-slate-700'
                       }`}
                     />
@@ -432,36 +451,26 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
                 })}
               </div>
 
-              {/* Metrics Grid */}
-              <div className="grid grid-cols-3 gap-2.5 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 font-mono mb-6">
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 font-mono mb-5 text-center">
                 <div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">
-                    {isBn ? 'একুরেসি' : 'Accuracy'}
-                  </div>
-                  <div className={`text-lg font-black ${accuracy >= 95 ? 'text-emerald-500' : 'text-amber-500'}`}>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">{isBn ? 'একুরেসি' : 'Acc'}</div>
+                  <div className={`text-base font-bold ${accuracy >= 95 ? 'text-teal-600 dark:text-teal-400' : 'text-amber-500'}`}>
                     {accuracy}%
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">
-                    {isBn ? 'স্পিড' : 'Speed'}
-                  </div>
-                  <div className="text-lg font-black text-slate-900 dark:text-white">
-                    {liveWpm} <span className="text-xs font-normal text-slate-400">WPM</span>
-                  </div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">{isBn ? 'স্পিড' : 'Speed'}</div>
+                  <div className="text-base font-bold text-slate-800 dark:text-slate-200">{liveWpm} WPM</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase">
-                    {isBn ? 'পয়েন্ট' : 'XP'}
-                  </div>
-                  <div className="text-lg font-black text-purple-500">
-                    +{lesson.xpReward}
-                  </div>
+                  <div className="text-[10px] text-slate-400 uppercase font-semibold">{isBn ? 'পয়েন্ট' : 'XP'}</div>
+                  <div className="text-base font-bold text-purple-600">+{lesson.xpReward}</div>
                 </div>
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-2">
                 {accuracy >= 95 && onNextLesson ? (
                   <button
                     id="btn-modal-next-lesson"
@@ -469,10 +478,10 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
                       setIsCompleted(false);
                       onNextLesson();
                     }}
-                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition-all active:scale-95"
+                    className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-500/20 transition-all cursor-pointer"
                   >
-                    {isBn ? 'পরবর্তী লেসনে যান' : 'Continue to Next Lesson'}
-                    <ArrowRight className="w-4 h-4" />
+                    <span>{isBn ? 'পরবর্তী লেসন (Enter)' : 'Next Lesson (Enter)'}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 ) : null}
 
@@ -482,21 +491,11 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
                     setIsCompleted(false);
                     resetPractice();
                   }}
-                  className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all active:scale-95"
+                  className="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  {isBn ? 'আবার অনুশীলন করুন' : 'Retry This Lesson'}
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{isBn ? 'আবার চেষ্টা করুন (Esc)' : 'Retry (Esc)'}</span>
                 </button>
-
-                {onSelectAnotherLesson && (
-                  <button
-                    id="btn-modal-all-lessons"
-                    onClick={onSelectAnotherLesson}
-                    className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 pt-1"
-                  >
-                    {isBn ? 'মডিউল তালিকায় ফিরে যান' : 'Back to Lesson Library'}
-                  </button>
-                )}
               </div>
             </motion.div>
           </div>
