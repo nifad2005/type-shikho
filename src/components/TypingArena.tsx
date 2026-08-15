@@ -25,7 +25,10 @@ import {
   Volume2,
   VolumeX,
   AlertTriangle,
-  Sparkles
+  Sparkles,
+  Lightbulb,
+  Eye,
+  Target
 } from 'lucide-react';
 
 interface TypingArenaProps {
@@ -555,24 +558,60 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         </div>
       </div>
 
-      {/* Minimal First-Lesson Welcome Greeting with real Typing Animation */}
+      {/* Minimal First-Lesson Welcome Greeting with real Typing Animation & Beginner Advice */}
       {lesson.id === 'm1-l1' && typedInput.length === 0 && !isCompleted && (
         <motion.div
-          initial={{ opacity: 0, y: -8, scale: 0.98 }}
+          initial={{ opacity: 0, y: -8, scale: 0.99 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -8, scale: 0.98 }}
+          exit={{ opacity: 0, y: -8, scale: 0.99 }}
           transition={{ duration: 0.35, ease: 'easeOut' }}
-          className="w-full flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-2xl bg-teal-500/10 border border-teal-500/25 text-teal-700 dark:text-teal-300 text-xs sm:text-sm font-medium select-none shadow-xs text-center min-h-[44px]"
+          className="w-full flex flex-col gap-2.5 p-3.5 rounded-2xl bg-teal-500/10 border border-teal-500/25 text-teal-700 dark:text-teal-300 select-none shadow-xs"
         >
-          <Sparkles className="w-4 h-4 text-teal-500 animate-pulse shrink-0" />
-          <span className="leading-snug">
-            <span className="font-semibold text-slate-900 dark:text-slate-100">
-              {displayedWelcome}
+          {/* Main animated typewriter welcome banner */}
+          <div className="flex items-center justify-center gap-2 text-center text-xs sm:text-sm font-medium">
+            <Sparkles className="w-4 h-4 text-teal-500 animate-pulse shrink-0" />
+            <span className="leading-snug">
+              <span className="font-semibold text-slate-900 dark:text-slate-100">
+                {displayedWelcome}
+              </span>
+              {!isTypingAnimationDone && (
+                <span className="inline-block w-1.5 h-3.5 ml-1 bg-teal-500 animate-pulse align-middle" />
+              )}
             </span>
-            {!isTypingAnimationDone && (
-              <span className="inline-block w-1.5 h-3.5 ml-1 bg-teal-500 animate-pulse align-middle" />
-            )}
-          </span>
+          </div>
+
+          {/* Quick Beginner Tips (একদম নতুন শিক্ষার্থীর জন্য গুরুত্বপূর্ণ পরামর্শ) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-teal-500/20 text-[11px] sm:text-xs">
+            <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-500/10 dark:bg-slate-900/50">
+              <Lightbulb className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-slate-800 dark:text-slate-200">{isBn ? 'হাত রাখার নিয়ম:' : 'Position:'}</strong>{' '}
+                <span className="text-slate-600 dark:text-slate-400">
+                  {isBn ? 'বাম তর্জনী F এবং ডান তর্জনী J-এর খাঁজে রাখুন।' : 'Left index on F, right on J.'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-500/10 dark:bg-slate-900/50">
+              <Eye className="w-3.5 h-3.5 text-teal-500 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-slate-800 dark:text-slate-200">{isBn ? 'সোনার নিয়ম:' : 'Golden Rule:'}</strong>{' '}
+                <span className="text-slate-600 dark:text-slate-400">
+                  {isBn ? 'কীবোর্ডে না তাকিয়ে শুধু স্ক্রিনের দিকে তাকিয়ে টাইপ করুন।' : 'Look at the screen, never look at keys.'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-xl bg-teal-500/10 dark:bg-slate-900/50">
+              <Target className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-slate-800 dark:text-slate-200">{isBn ? 'নির্ভুলতা:' : 'Accuracy:'}</strong>{' '}
+                <span className="text-slate-600 dark:text-slate-400">
+                  {isBn ? 'শুরুতে গতির চেয়ে ভুল না করার দিকে নজর দিন।' : 'Focus on 100% accuracy over raw speed.'}
+                </span>
+              </div>
+            </div>
+          </div>
         </motion.div>
       )}
 
