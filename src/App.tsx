@@ -305,6 +305,13 @@ export default function App() {
         )}
       </main>
 
+      {/* Elegant Minimal Footer */}
+      <footer className="w-full py-2.5 px-4 flex items-center justify-center text-center">
+        <p className="text-[11px] font-medium tracking-wide text-slate-400 dark:text-slate-500 select-none">
+          A <span className="font-semibold text-slate-600 dark:text-slate-400">NIBARON</span> Product
+        </p>
+      </footer>
+
       {/* Settings Modal */}
       <SettingsModal
         isOpen={isSettingsOpen}
