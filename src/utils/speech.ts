@@ -92,10 +92,8 @@ export function subscribeToSpeechState(listener: (speaking: boolean, text: strin
   };
 }
 
-let pendingSpeechRequest: { text: string; lang: Language; onEnd?: () => void } | null = null;
-
 /**
- * Unlocks browser audio policy on first user interaction or mouse movement
+ * Unlocks browser audio policy on first user interaction
  */
 export function unlockAudioContext() {
   if (typeof window === 'undefined') return;
@@ -121,48 +119,22 @@ export function unlockAudioContext() {
       loadVoices();
     }
   } catch {}
-
-  // If there was a queued speech request that was held by browser autoplay policy, fire it immediately!
-  if (pendingSpeechRequest) {
-    const req = pendingSpeechRequest;
-    pendingSpeechRequest = null;
-    speakText(req.text, req.lang, true, req.onEnd);
-  }
 }
 
-// Global auto-unlock listeners for any user gesture or cursor movement
+// Global auto-unlock listeners
 if (typeof window !== 'undefined') {
   const handleInteraction = () => {
     unlockAudioContext();
   };
-  const events = [
-    'mousemove',
-    'pointermove',
-    'mouseenter',
-    'touchstart',
-    'touchend',
-    'pointerdown',
-    'keydown',
-    'keypress',
-    'focus',
-    'click',
-    'wheel',
-    'scroll'
-  ];
-  events.forEach((evt) => {
-    window.addEventListener(evt, handleInteraction, { passive: true });
-  });
-
-  // Attempt immediate unlock on DOMContentLoaded / window load
-  window.addEventListener('DOMContentLoaded', handleInteraction);
-  window.addEventListener('load', handleInteraction);
+  window.addEventListener('click', handleInteraction, { passive: true });
+  window.addEventListener('keydown', handleInteraction, { passive: true });
+  window.addEventListener('touchstart', handleInteraction, { passive: true });
 }
 
 /**
  * Stops all active speech playback immediately
  */
 export function stopSpeaking() {
-  pendingSpeechRequest = null;
   if (sharedAudio) {
     try {
       sharedAudio.pause();
@@ -382,15 +354,13 @@ export async function speakText(
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch((err) => {
-          console.warn('HTML Audio play error, queued for auto-unlock:', err);
-          pendingSpeechRequest = { text: cleanText, lang: 'bn', onEnd };
+          console.warn('HTML Audio play error, fallback to Web Speech:', err);
           speakViaWebSpeech(cleanText, 'bn', onEnd);
         });
       }
       return;
     } catch (err) {
       console.warn('HTML Audio execution failed, fallback to Web Speech:', err);
-      pendingSpeechRequest = { text: cleanText, lang: 'bn', onEnd };
       speakViaWebSpeech(cleanText, 'bn', onEnd);
       return;
     }

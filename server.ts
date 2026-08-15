@@ -40,68 +40,24 @@ app.get("/api/tts", async (req, res) => {
       return res.send(cached.buffer);
     }
 
-    // Split text into chunks of <= 100 characters by sentence or word
-    const splitTextIntoChunks = (str: string, maxLen = 95): string[] => {
-      if (str.length <= maxLen) return [str];
-      const chunks: string[] = [];
-      const sentences = str.split(/(?<=[।?!.,\n])/g);
-      let currentChunk = "";
+    // Use standard Google TTS service
+    const targetUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
 
-      for (const sentence of sentences) {
-        if ((currentChunk + sentence).length <= maxLen) {
-          currentChunk += sentence;
-        } else {
-          if (currentChunk.trim()) chunks.push(currentChunk.trim());
-          if (sentence.length <= maxLen) {
-            currentChunk = sentence;
-          } else {
-            // Split long sentence by spaces
-            const words = sentence.split(/\s+/);
-            currentChunk = "";
-            for (const word of words) {
-              if ((currentChunk + " " + word).trim().length <= maxLen) {
-                currentChunk = (currentChunk + " " + word).trim();
-              } else {
-                if (currentChunk.trim()) chunks.push(currentChunk.trim());
-                currentChunk = word;
-              }
-            }
-          }
-        }
-      }
-      if (currentChunk.trim()) chunks.push(currentChunk.trim());
-      return chunks;
-    };
+    const response = await fetch(targetUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://translate.google.com/",
+      },
+    });
 
-    const textChunks = splitTextIntoChunks(text);
-    const bufferList: Buffer[] = [];
-
-    for (const chunk of textChunks) {
-      if (!chunk.trim()) continue;
-      const targetUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk.trim())}&tl=${lang}&client=tw-ob`;
-
-      const response = await fetch(targetUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Referer": "https://translate.google.com/",
-        },
-      });
-
-      if (!response.ok) {
-        console.warn(`TTS upstream chunk error (${response.status}) for chunk:`, chunk);
-        continue;
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      bufferList.push(Buffer.from(arrayBuffer));
+    if (!response.ok) {
+      console.warn(`TTS upstream error: ${response.status}`);
+      return res.status(response.status).send("Failed to fetch audio stream");
     }
 
-    if (bufferList.length === 0) {
-      return res.status(500).send("Failed to fetch audio stream");
-    }
-
-    const buffer = Buffer.concat(bufferList);
-    const contentType = "audio/mpeg";
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get("content-type") || "audio/mpeg";
 
     // Cache up to 300 audio items in memory
     if (audioCache.size > 300) {
