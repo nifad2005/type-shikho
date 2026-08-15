@@ -1,0 +1,6 @@
+{
+  "name": "TypeMaster - শূন্য থেকে টাইপিং একাডেমি",
+  "description": "Guided touch typing mastery platform from scratch with visual hand & keyboard guidance, muscle memory modules, smart error analysis, gamified achievements, and typing games.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

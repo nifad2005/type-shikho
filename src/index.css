@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-4px); }
+  40%, 80% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out;
+}
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  header, nav, button, .print\:hidden {
+    display: none !important;
+  }
+  #certificate-print-canvas {
+    border-width: 6px !important;
+    box-shadow: none !important;
+  }
+}
