@@ -19,6 +19,7 @@ import { CustomPracticeArena } from './components/CustomPracticeArena';
 import { SmartPracticeModal } from './components/SmartPracticeModal';
 import { CertificateModal } from './components/CertificateModal';
 import { OnboardingModal } from './components/OnboardingModal';
+import { SettingsModal } from './components/SettingsModal';
 import { ArrowLeft } from 'lucide-react';
 import { stopSpeaking, preloadLessonAudio } from './utils/speech';
 
@@ -115,6 +116,7 @@ export default function App() {
   const [isSmartModalOpen, setIsSmartModalOpen] = useState<boolean>(false);
   const [isCertificateOpen, setIsCertificateOpen] = useState<boolean>(false);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   // Sync to localStorage
   useEffect(() => {
@@ -221,6 +223,18 @@ export default function App() {
     });
   }, []);
 
+  const handleResetProgress = () => {
+    const resetStats: UserStats = {
+      ...INITIAL_USER_STATS,
+      lastActiveDate: new Date().toISOString().split('T')[0],
+    };
+    setUserStats(resetStats);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem('typemaster_active_lesson_id');
+    stopSpeaking();
+    setActiveLesson(MODULES_DATA[0].lessons[0]);
+  };
+
   const toggleSound = () => {
     setSoundType((prev) => (prev === 'mute' ? 'mechanical' : 'mute'));
   };
@@ -248,18 +262,9 @@ export default function App() {
       <Header
         currentLesson={activeLesson}
         language={language}
-        onLanguageChange={setLanguage}
-        soundType={soundType}
-        onToggleSound={toggleSound}
-        voiceEnabled={voiceEnabled}
-        onToggleVoice={toggleVoice}
         theme={theme}
-        onThemeChange={setTheme}
-        userStats={userStats}
         onOpenCurriculum={() => setIsCurriculumOpen(true)}
-        onOpenCustomPractice={() => setIsCustomPracticeOpen(true)}
-        onOpenSmartDrill={() => setIsSmartModalOpen(true)}
-        onOpenCertificate={() => setIsCertificateOpen(true)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onPrevLesson={handlePrevLesson}
         onNextLesson={handleNextLesson}
         hasPrevLesson={hasPrevLesson}
@@ -301,6 +306,26 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        language={language}
+        onLanguageChange={setLanguage}
+        theme={theme}
+        onThemeChange={setTheme}
+        voiceEnabled={voiceEnabled}
+        onToggleVoice={toggleVoice}
+        soundType={soundType}
+        onSoundTypeChange={setSoundType}
+        userStats={userStats}
+        onResetProgress={handleResetProgress}
+        onOpenCurriculum={() => setIsCurriculumOpen(true)}
+        onOpenCustomPractice={() => setIsCustomPracticeOpen(true)}
+        onOpenSmartDrill={() => setIsSmartModalOpen(true)}
+        onOpenCertificate={() => setIsCertificateOpen(true)}
+      />
 
       {/* Curriculum Roadmap Modal */}
       {isCurriculumOpen && (
