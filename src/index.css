@@ -1,5 +1,66 @@
 @import "tailwindcss";
 
+@layer base {
+  body {
+    font-family: 'Hind Siliguri', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  .font-mono {
+    font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* Custom Themes */
+.theme-light {
+  --bg-primary: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-muted: #f1f5f9;
+  --border-color: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-subtle: #94a3b8;
+}
+
+.theme-dark {
+  --bg-primary: #0b0f19;
+  --bg-surface: #111827;
+  --bg-muted: #1e293b;
+  --border-color: #1f2937;
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-subtle: #475569;
+}
+
+.theme-sepia {
+  --bg-primary: #fbf7ee;
+  --bg-surface: #f4ede0;
+  --bg-muted: #ebdcc9;
+  --border-color: #dfcdb8;
+  --text-main: #292524;
+  --text-muted: #78716c;
+  --text-subtle: #a8a29e;
+}
+
+@keyframes caretPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.animate-caret {
+  animation: caretPulse 0.9s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes keyGlow {
+  0%, 100% { box-shadow: 0 0 14px rgba(20, 184, 166, 0.5); }
+  50% { box-shadow: 0 0 24px rgba(20, 184, 166, 0.85); }
+}
+
+.animate-key-glow {
+  animation: keyGlow 1.4s ease-in-out infinite;
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-4px); }

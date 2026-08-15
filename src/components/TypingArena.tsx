@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Lesson, Language, SoundEffectType, UserStats, KeyFingerInfo } from '../types';
+import { Lesson, Language, SoundEffectType, UserStats, KeyFingerInfo, ThemeMode } from '../types';
 import { getKeyInfoForChar } from '../utils/keyboardMap';
 import { playKeySound, playErrorSound, playCelebrationFanfare } from '../utils/audio';
-import { VirtualHands } from './VirtualHands';
+import { 
+  speakText, 
+  getLessonSpokenGuide, 
+  stopSpeaking, 
+  unlockAudioContext, 
+  preloadLessonAudio,
+  subscribeToSpeechState,
+  isAudioSpeaking,
+  getCurrentSpokenText
+} from '../utils/speech';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { MiniGameSkyFall } from './MiniGameSkyFall';
 import { motion, AnimatePresence } from 'motion/react';
@@ -10,19 +19,24 @@ import confetti from 'canvas-confetti';
 import { 
   RotateCcw, 
   ArrowRight, 
-  Sparkles, 
-  Star,
-  Target,
+  Star, 
   Trophy,
-  CheckCircle2,
-  Gamepad2
+  Gamepad2,
+  Volume2,
+  VolumeX,
+  AlertTriangle,
+  Sparkles
 } from 'lucide-react';
 
 interface TypingArenaProps {
   lesson: Lesson;
   language: Language;
   soundType: SoundEffectType;
+  voiceEnabled?: boolean;
+  onToggleVoice?: () => void;
   userStats: UserStats;
+  theme?: ThemeMode;
+  isNextLessonUnlocked?: boolean;
   onLessonComplete: (result: { lessonId: string; accuracy: number; wpm: number; stars: number; mistakes: Record<string, number> }) => void;
   onNextLesson?: () => void;
   onSelectAnotherLesson?: () => void;
@@ -32,65 +46,54 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   lesson,
   language,
   soundType,
+  voiceEnabled = true,
+  onToggleVoice,
   userStats,
+  theme = 'light',
+  isNextLessonUnlocked = false,
   onLessonComplete,
   onNextLesson,
   onSelectAnotherLesson,
 }) => {
   const isBn = language === 'bn';
+  const isDark = theme === 'dark';
+  const isSepia = theme === 'sepia';
 
-  // If this is a Game Checkpoint Lesson
-  if (lesson.type === 'game') {
-    return (
-      <div className="w-full max-w-4xl mx-auto flex flex-col items-center gap-4 py-2">
-        <div className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
-              <Gamepad2 className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-                {isBn ? lesson.titleBn : lesson.titleEn}
-              </h2>
-              <p className="text-xs text-slate-500">
-                {isBn ? lesson.descriptionBn : lesson.descriptionEn}
-              </p>
-            </div>
-          </div>
-          {onSelectAnotherLesson && (
-            <button
-              onClick={onSelectAnotherLesson}
-              className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
-            >
-              {isBn ? 'অন্য লেসন' : 'All Lessons'}
-            </button>
-          )}
-        </div>
+  // Voice speech state
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(() => isAudioSpeaking());
+  const [currentSpokenText, setCurrentSpokenText] = useState<string>(() => getCurrentSpokenText());
 
-        <MiniGameSkyFall
-          language={language}
-          soundType={soundType}
-          moduleId={lesson.moduleId}
-          onGameComplete={(score, maxCombo) => {
-            const stars = score >= 200 ? 3 : score >= 100 ? 2 : 1;
-            onLessonComplete({
-              lessonId: lesson.id,
-              accuracy: 95,
-              wpm: Math.min(60, Math.floor(score / 8)),
-              stars,
-              mistakes: {},
-            });
-          }}
-          onNextLesson={onNextLesson}
-        />
-      </div>
-    );
-  }
+  // Subscribe to speech state
+  useEffect(() => {
+    const unsubscribe = subscribeToSpeechState((speaking, text) => {
+      setIsSpeaking(speaking);
+      setCurrentSpokenText(text);
+    });
+    return unsubscribe;
+  }, []);
 
-  // Standard Guided Typing Lesson
-  const targetText = lesson.targetText;
+  const handleGameComplete = useCallback((score: number) => {
+    const stars = score >= 200 ? 3 : score >= 100 ? 2 : 1;
+    const isPassed = score >= 100;
+    onLessonComplete({
+      lessonId: lesson.id,
+      accuracy: isPassed ? 95 : 75,
+      wpm: Math.min(60, Math.floor(score / 8)),
+      stars: isPassed ? stars : 0,
+      mistakes: {},
+    });
+  }, [lesson.id, onLessonComplete]);
+
+  // Trigger lesson voice guidance
+  const playLessonVoice = useCallback(() => {
+    stopSpeaking();
+    unlockAudioContext();
+    const spokenGuide = getLessonSpokenGuide(lesson, language);
+    speakText(spokenGuide, language, true);
+  }, [lesson, language]);
 
   // Typing state
+  const targetText = lesson.targetText || '';
   const [typedInput, setTypedInput] = useState<string>('');
   const [startTime, setStartTime] = useState<number | null>(null);
   const [endTime, setEndTime] = useState<number | null>(null);
@@ -100,6 +103,8 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   const [lastPressedKey, setLastPressedKey] = useState<string | null>(null);
   const [isLastKeyError, setIsLastKeyError] = useState<boolean>(false);
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
+  const [isCapsLockOn, setIsCapsLockOn] = useState<boolean>(false);
+  const [isFocused, setIsFocused] = useState<boolean>(true);
 
   // Hidden focus textarea
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -107,6 +112,7 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
 
   // Reset function
   const resetPractice = useCallback(() => {
+    stopSpeaking();
     setTypedInput('');
     setStartTime(null);
     setEndTime(null);
@@ -121,18 +127,46 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
     }
   }, []);
 
+  // When lesson changes or loads: reset and auto-speak
   useEffect(() => {
     resetPractice();
-  }, [lesson.id, resetPractice]);
+    preloadLessonAudio(lesson, language);
 
-  // Keep focus on input
+    if (voiceEnabled && lesson.type !== 'game') {
+      const spokenGuide = getLessonSpokenGuide(lesson, language);
+      speakText(spokenGuide, language, true);
+    }
+  }, [lesson.id, voiceEnabled, language]);
+
+  // Clean up speech when unmounting
   useEffect(() => {
-    const timer = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 100);
-    return () => clearTimeout(timer);
+    return () => {
+      stopSpeaking();
+    };
   }, []);
 
+  // Global click & focus maintainer
+  useEffect(() => {
+    inputRef.current?.focus();
+    const handleWindowClick = (e: MouseEvent) => {
+      unlockAudioContext();
+      const target = e.target as HTMLElement;
+      if (
+        target.closest('button') || 
+        target.closest('input') || 
+        target.closest('select') || 
+        target.closest('[role="dialog"]')
+      ) {
+        return;
+      }
+      inputRef.current?.focus();
+    };
+
+    window.addEventListener('click', handleWindowClick);
+    return () => window.removeEventListener('click', handleWindowClick);
+  }, []);
+
+  // Keystroke metrics calculation
   const currentIndex = typedInput.length;
   const currentChar = currentIndex < targetText.length ? targetText[currentIndex] : '';
   const currentKeyInfo: KeyFingerInfo | null = currentChar ? getKeyInfoForChar(currentChar) : null;
@@ -146,40 +180,89 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
   const elapsedMinutes = startTime ? ((endTime || Date.now()) - startTime) / 60000 : 0;
   const wordsTyped = totalTyped / 5;
   const liveWpm = elapsedMinutes > 0.02 ? Math.round(wordsTyped / elapsedMinutes) : 0;
+  const progressPercent = targetText.length > 0 ? Math.min(100, Math.round((totalTyped / targetText.length) * 100)) : 0;
 
-  // Global Keyboard Shortcuts (Esc to restart, Enter on complete to continue)
-  useEffect(() => {
-    const handleGlobalKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        resetPractice();
-      }
-      if (e.key === 'Enter' && isCompleted && onNextLesson) {
-        e.preventDefault();
-        setIsCompleted(false);
-        onNextLesson();
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKey);
-    return () => window.removeEventListener('keydown', handleGlobalKey);
-  }, [isCompleted, onNextLesson, resetPractice]);
+  // Finish Lesson logic
+  const handleFinishLesson = useCallback((finalTypedText: string, finalErrorSet: Set<number>, finalMistakes: Record<string, number>) => {
+    const finishTime = Date.now();
+    setEndTime(finishTime);
+    setIsCompleted(true);
 
-  // Handle Keystrokes
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isCompleted) return;
+    const totalMinutes = (finishTime - (startTime || finishTime)) / 60000;
+    const finalWpm = totalMinutes > 0 ? Math.round((targetText.length / 5) / totalMinutes) : 28;
+    const finalAccuracy = Math.max(0, Math.round(((targetText.length - finalErrorSet.size) / targetText.length) * 100));
+
+    let stars = 1;
+    if (finalAccuracy >= 98) {
+      stars = 3;
+    } else if (finalAccuracy >= 94) {
+      stars = 2;
+    } else if (finalAccuracy < 90) {
+      stars = 0;
+    }
+
+    if (finalAccuracy >= 90) {
+      playCelebrationFanfare();
+      confetti({
+        particleCount: 65,
+        spread: 60,
+        origin: { y: 0.6 },
+      });
+
+      if (voiceEnabled) {
+        speakText(
+          isBn
+            ? `চমৎকার! আপনি ${finalAccuracy}% নির্ভুলতার সাথে লেসন সম্পন্ন করেছেন।`
+            : `Great job! You completed this lesson with ${finalAccuracy}% accuracy.`,
+          language,
+          true
+        );
+      }
+    }
+
+    onLessonComplete({
+      lessonId: lesson.id,
+      accuracy: finalAccuracy,
+      wpm: finalWpm,
+      stars,
+      mistakes: finalMistakes,
+    });
+  }, [startTime, targetText, voiceEnabled, isBn, language, onLessonComplete, lesson.id]);
+
+  // Keystroke Processor
+  const processKey = useCallback((e: KeyboardEvent | React.KeyboardEvent) => {
+    if (e.getModifierState) {
+      setIsCapsLockOn(e.getModifierState('CapsLock'));
+    }
+
+    if (isCompleted || lesson.type === 'game') return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      resetPractice();
+      return;
+    }
 
     if (['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) {
       return;
     }
 
     if (e.key === 'Backspace') {
+      e.preventDefault();
       if (typedInput.length > 0) {
+        const lastIdx = typedInput.length - 1;
         setTypedInput((prev) => prev.slice(0, -1));
+        
+        setErrorIndices((prev) => {
+          const next = new Set(prev);
+          next.delete(lastIdx);
+          return next;
+        });
+
         setLastPressedKey('Backspace');
         setIsLastKeyError(false);
         playKeySound(soundType, false);
       }
-      e.preventDefault();
       return;
     }
 
@@ -205,157 +288,248 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
       const newTyped = typedInput + pressedChar;
       setTypedInput(newTyped);
 
-      // Check if finished
       if (newTyped.length === targetText.length) {
-        const finishTime = Date.now();
-        setEndTime(finishTime);
-        setIsCompleted(true);
-
-        const totalMinutes = (finishTime - (startTime || finishTime)) / 60000;
-        const finalWpm = totalMinutes > 0 ? Math.round((targetText.length / 5) / totalMinutes) : 30;
-        const finalAccuracy = Math.max(0, Math.round(((targetText.length - errorIndices.size) / targetText.length) * 100));
-
-        let stars = 1;
-        if (finalAccuracy >= 98) {
-          stars = 3;
-        } else if (finalAccuracy >= 94) {
-          stars = 2;
-        }
-
-        playCelebrationFanfare();
-        confetti({
-          particleCount: 70,
-          spread: 60,
-          origin: { y: 0.6 },
-        });
-
-        onLessonComplete({
-          lessonId: lesson.id,
-          accuracy: finalAccuracy,
-          wpm: finalWpm,
-          stars,
-          mistakes: mistakesMap,
-        });
+        handleFinishLesson(newTyped, errorIndices, mistakesMap);
       }
     } else {
-      // Mistake
       setIsLastKeyError(true);
       playErrorSound(soundType);
       setCombo(0);
 
-      setMistakesMap((prev) => ({
-        ...prev,
-        [expectedChar]: (prev[expectedChar] || 0) + 1,
-      }));
+      const updatedMistakes = {
+        ...mistakesMap,
+        [expectedChar]: (mistakesMap[expectedChar] || 0) + 1,
+      };
+      setMistakesMap(updatedMistakes);
 
-      setErrorIndices((prev) => new Set(prev).add(currentIndex));
+      const updatedErrors = new Set(errorIndices).add(currentIndex);
+      setErrorIndices(updatedErrors);
 
-      // Advance with mistake recorded
       const newTyped = typedInput + pressedChar;
       setTypedInput(newTyped);
 
       if (newTyped.length === targetText.length) {
-        const finishTime = Date.now();
-        setEndTime(finishTime);
-        setIsCompleted(true);
-        const totalMinutes = (finishTime - (startTime || finishTime)) / 60000;
-        const finalWpm = totalMinutes > 0 ? Math.round((targetText.length / 5) / totalMinutes) : 20;
-        const finalAccuracy = Math.max(0, Math.round(((targetText.length - (errorIndices.size + 1)) / targetText.length) * 100));
-
-        const stars = finalAccuracy >= 95 ? 2 : 1;
-        onLessonComplete({
-          lessonId: lesson.id,
-          accuracy: finalAccuracy,
-          wpm: finalWpm,
-          stars,
-          mistakes: {
-            ...mistakesMap,
-            [expectedChar]: (mistakesMap[expectedChar] || 0) + 1,
-          },
-        });
+        handleFinishLesson(newTyped, updatedErrors, updatedMistakes);
       }
     }
-  };
+  }, [currentIndex, errorIndices, handleFinishLesson, isCompleted, lesson.type, mistakesMap, resetPractice, soundType, startTime, targetText, typedInput]);
+
+  // Global Keyboard Listener
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      unlockAudioContext();
+      if (lesson.type === 'game') return;
+
+      const activeEl = document.activeElement;
+      const isInputFocused = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || (activeEl.tagName === 'TEXTAREA' && activeEl !== inputRef.current));
+      
+      if (isInputFocused) return;
+
+      if (e.getModifierState) {
+        setIsCapsLockOn(e.getModifierState('CapsLock'));
+      }
+
+      if (isCompleted) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          setIsCompleted(false);
+          if (accuracy >= 90 && onNextLesson) {
+            onNextLesson();
+          } else {
+            resetPractice();
+          }
+          return;
+        }
+
+        if (e.key === 'Escape' || e.key === 'r' || e.key === 'R') {
+          e.preventDefault();
+          setIsCompleted(false);
+          resetPractice();
+          return;
+        }
+      }
+
+      if (!isCompleted) {
+        if (document.activeElement !== inputRef.current) {
+          inputRef.current?.focus();
+        }
+        processKey(e);
+      }
+    };
+
+    const handleGlobalKeyUp = (e: KeyboardEvent) => {
+      if (e.getModifierState) {
+        setIsCapsLockOn(e.getModifierState('CapsLock'));
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keyup', handleGlobalKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+      window.removeEventListener('keyup', handleGlobalKeyUp);
+    };
+  }, [accuracy, isCompleted, lesson.type, onNextLesson, processKey]);
+
+  // If this is a Game Checkpoint Lesson
+  if (lesson.type === 'game') {
+    return (
+      <div className="w-full max-w-4xl mx-auto flex flex-col items-center gap-3 py-1">
+        <div className={`w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-colors shadow-xs ${
+          isDark
+            ? 'bg-slate-900 border-slate-800'
+            : isSepia
+            ? 'bg-[#f4ede0] border-[#e2d5c3]'
+            : 'bg-white border-slate-200'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+              <Gamepad2 className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold">
+                {isBn ? lesson.titleBn : lesson.titleEn}
+              </h2>
+              <p className="text-xs opacity-75">
+                {isBn ? lesson.descriptionBn : lesson.descriptionEn}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={playLessonVoice}
+              title={isBn ? 'নির্দেশনা শুনুন' : 'Listen to voice guide'}
+              className="p-1.5 rounded-lg text-teal-600 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/40 transition-colors cursor-pointer"
+            >
+              <Volume2 className="w-4 h-4" />
+            </button>
+            {onSelectAnotherLesson && (
+              <button
+                onClick={onSelectAnotherLesson}
+                className="text-xs font-semibold text-teal-600 dark:text-teal-400 hover:underline cursor-pointer"
+              >
+                {isBn ? 'সকল লেসন' : 'All Lessons'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <MiniGameSkyFall
+          language={language}
+          soundType={soundType}
+          voiceEnabled={voiceEnabled}
+          moduleId={lesson.moduleId}
+          onGameComplete={handleGameComplete}
+          onNextLesson={onNextLesson}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div id="typing-arena-container" className="w-full max-w-4xl mx-auto flex flex-col items-center gap-3">
-      {/* Hidden textarea to capture keystrokes smoothly */}
+    <div 
+      id="typing-arena-container" 
+      onClick={() => {
+        unlockAudioContext();
+        inputRef.current?.focus();
+      }}
+      className="w-full max-w-4xl mx-auto flex flex-col items-center gap-3"
+    >
+      {/* Hidden textarea to capture mobile or accessibility inputs */}
       <textarea
         ref={inputRef}
         value={typedInput}
         onChange={() => {}}
-        onKeyDown={handleKeyDown}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         className="sr-only"
         autoFocus
         aria-label="Typing input area"
       />
 
-      {/* Clean Minimal Header Bar */}
-      <div className="w-full flex items-center justify-between px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center font-bold">
-            <Target className="w-4 h-4" />
+      {/* Prominent Caps Lock Warning Banner - sleek and minimal */}
+      {isCapsLockOn && (
+        <div 
+          id="capslock-warning"
+          className="w-full bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 px-3 py-1 rounded-xl flex items-center justify-between text-xs font-mono"
+        >
+          <div className="flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>CAPS LOCK ON</span>
           </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
-              {isBn ? lesson.titleBn : lesson.titleEn}
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              {isBn ? lesson.descriptionBn : lesson.descriptionEn}
-            </p>
-          </div>
+        </div>
+      )}
+
+      {/* Minimal Top Controls Bar */}
+      <div 
+        className="w-full flex items-center justify-between px-2 py-1 select-none font-mono text-xs text-slate-500"
+      >
+        <div className="flex items-center gap-2">
+          {onToggleVoice && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleVoice();
+              }}
+              className="p-1 rounded-lg hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              {voiceEnabled ? <Volume2 className="w-4 h-4 text-teal-600" /> : <VolumeX className="w-4 h-4 opacity-50" />}
+            </button>
+          )}
+          {voiceEnabled && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                playLessonVoice();
+              }}
+              className="p-1 rounded-lg hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-teal-600" />
+            </button>
+          )}
         </div>
 
         {/* Live Gauges */}
-        <div className="flex items-center gap-4 sm:gap-6 font-mono text-xs sm:text-sm">
-          {/* Accuracy */}
-          <div className="flex items-baseline gap-1">
-            <span className="text-[11px] uppercase font-bold text-slate-400">
-              {isBn ? 'একুরেসি' : 'Acc'}:
-            </span>
-            <span
-              className={`font-black text-sm sm:text-base ${
-                accuracy >= 95 ? 'text-teal-600 dark:text-teal-400' : 'text-amber-500'
-              }`}
-            >
-              {accuracy}%
-            </span>
-          </div>
-
-          {/* WPM */}
-          <div className="flex items-baseline gap-1">
-            <span className="text-[11px] uppercase font-bold text-slate-400">WPM:</span>
-            <span className="font-black text-sm sm:text-base text-slate-800 dark:text-slate-200">
-              {liveWpm}
-            </span>
-          </div>
-
-          {/* Restart Button */}
+        <div className="flex items-center gap-3">
+          <span>
+            {accuracy}%
+          </span>
+          <span>
+            {liveWpm} wpm
+          </span>
           <button
             id="btn-restart-lesson"
-            onClick={resetPractice}
-            title={isBn ? 'পুনরায় শুরু (Esc)' : 'Restart (Esc)'}
-            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              resetPractice();
+            }}
+            title="Esc"
+            className="p-1 rounded-lg hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      {/* Main Text Display Arena */}
+      {/* Main Text Display Arena (The Central Hero Focus) */}
       <div
         id="text-stream-box"
-        onClick={() => inputRef.current?.focus()}
         ref={textContainerRef}
-        className="w-full min-h-[120px] sm:min-h-[140px] px-6 py-5 bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl cursor-text relative flex flex-wrap items-center content-center select-none overflow-hidden transition-all focus-within:border-teal-500"
+        className={`w-full min-h-[120px] px-6 py-6 rounded-2xl cursor-text relative flex flex-col justify-center select-none overflow-hidden transition-all duration-200 ${
+          isDark
+            ? 'bg-slate-900/70 border border-slate-800/80'
+            : isSepia
+            ? 'bg-[#f4ede0]/80 border border-[#e2d5c3]'
+            : 'bg-white border border-slate-200/80'
+        }`}
       >
-        {/* Subtle Start Prompt */}
-        {!startTime && typedInput.length === 0 && (
-          <div className="absolute top-2 right-3 text-[10px] text-teal-600 dark:text-teal-400 font-semibold bg-teal-500/10 px-2 py-0.5 rounded-md flex items-center gap-1">
-            <Sparkles className="w-3 h-3" />
-            <span>{isBn ? 'টাইপ শুরু করুন' : 'Start typing'}</span>
-          </div>
-        )}
+        {/* Subtle Lesson Progress Line */}
+        <div className={`absolute top-0 left-0 right-0 h-0.5 ${isDark ? 'bg-slate-800' : isSepia ? 'bg-[#e4d6c4]' : 'bg-slate-100'}`}>
+          <div 
+            className="h-full bg-teal-500 transition-all duration-150"
+            style={{ width: `${progressPercent}%` }}
+          />
+        </div>
 
         {/* Text Stream */}
         <div className="font-mono text-xl sm:text-2xl md:text-3xl tracking-wider leading-relaxed flex flex-wrap items-center">
@@ -364,22 +538,36 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
             const isCurrent = index === currentIndex;
             const isError = errorIndices.has(index);
 
-            let charClass = 'text-slate-400 dark:text-slate-500';
+            let charClass = '';
 
             if (isTyped) {
               if (isError) {
-                charClass = 'text-rose-600 bg-rose-100 dark:bg-rose-950/80 rounded-xs px-0.5';
+                charClass = 'text-rose-500 bg-rose-500/15 rounded-sm px-0.5 font-bold';
               } else {
-                charClass = 'text-teal-600 dark:text-teal-400 font-semibold';
+                charClass = isDark ? 'text-teal-400 font-medium' : 'text-teal-600 font-medium';
               }
             } else if (isCurrent) {
-              charClass = 'text-slate-900 dark:text-white font-black bg-teal-500/20 dark:bg-teal-400/30 rounded-xs px-0.5 underline underline-offset-8 decoration-teal-500 decoration-4 animate-pulse';
+              charClass = isDark
+                ? 'text-white font-bold bg-teal-500/25 rounded-sm px-0.5 ring-1 ring-teal-400'
+                : isSepia
+                ? 'text-stone-900 font-bold bg-amber-500/25 rounded-sm px-0.5 ring-1 ring-amber-500'
+                : 'text-slate-900 font-bold bg-teal-500/20 rounded-sm px-0.5 ring-1 ring-teal-500';
+            } else {
+              charClass = isDark
+                ? 'text-slate-600'
+                : isSepia
+                ? 'text-stone-400'
+                : 'text-slate-400';
             }
 
             return (
-              <span key={index} className={`relative transition-all duration-75 ${charClass}`}>
+              <span key={index} className={`relative inline-flex items-center transition-all duration-75 ${charClass}`}>
+                {/* Blinking Vertical Caret */}
+                {isCurrent && (
+                  <span className="inline-block w-0.5 h-6 sm:h-7 bg-teal-500 animate-pulse -mr-0.5 rounded-full" />
+                )}
                 {char === ' ' ? (
-                  <span className={`inline-block min-w-[0.6em] ${isCurrent ? 'bg-teal-500/30 rounded-sm' : ''}`}>
+                  <span className={`inline-block min-w-[0.55em] ${isCurrent ? 'bg-teal-500/30 rounded-sm' : ''}`}>
                     {isCurrent ? '␣' : ' '}
                   </span>
                 ) : (
@@ -391,60 +579,68 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
         </div>
       </div>
 
-      {/* Visual Hands Guide */}
-      <VirtualHands
-        activeFinger={currentKeyInfo ? currentKeyInfo.finger : null}
-        targetKeyDisplay={currentChar}
-        language={language}
-      />
-
-      {/* Virtual Keyboard Guide */}
+      {/* Virtual Keyboard Guide (Crisp & Responsive) */}
       <VirtualKeyboard
         targetKeyInfo={currentKeyInfo}
         lastPressedKey={lastPressedKey}
         isErrorKey={isLastKeyError}
+        theme={theme}
       />
 
       {/* Completion Modal */}
       <AnimatePresence>
         {isCompleted && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-2xl text-center"
+              className={`w-full max-w-sm rounded-3xl p-6 shadow-2xl text-center border ${
+                isDark
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : isSepia
+                  ? 'bg-[#FAF7F2] border-[#dfcdb8] text-stone-900'
+                  : 'bg-white border-slate-200 text-slate-900'
+              }`}
             >
-              <div className="w-12 h-12 mx-auto mb-3 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
-                <Trophy className="w-6 h-6 animate-bounce" />
+              <div className={`w-12 h-12 mx-auto mb-2.5 rounded-2xl flex items-center justify-center ${
+                accuracy >= 90 ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400' : 'bg-rose-500/10 text-rose-500'
+              }`}>
+                {accuracy >= 90 ? (
+                  <Trophy className="w-6 h-6 animate-bounce" />
+                ) : (
+                  <RotateCcw className="w-6 h-6" />
+                )}
               </div>
 
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                {accuracy >= 95
-                  ? (isBn ? 'লেসন সম্পন্ন হয়েছে!' : 'Lesson Mastered!')
-                  : (isBn ? 'অনুশীলন সম্পন্ন' : 'Practice Complete')}
+              <h3 className="text-lg font-bold">
+                {accuracy >= 90
+                  ? (isBn ? 'লেসন সফলভাবে সম্পন্ন!' : 'Lesson Mastered!')
+                  : (isBn ? 'পুনরায় চেষ্টা করুন' : 'Needs Practice')}
               </h3>
 
-              <p className="text-xs text-slate-500 mt-1 mb-4">
-                {accuracy >= 95
-                  ? (isBn ? 'চমৎকার! আপনি ৯৫%+ নির্ভুলতা বজায় রেখেছেন।' : 'Great accuracy on this drill!')
-                  : (isBn ? 'আরেকবার চেষ্টা করে ৯৫%+ একুরেসি আনুন।' : 'Try again for 95%+ accuracy.')}
+              <p className="text-xs opacity-70 mt-1 mb-3 leading-relaxed">
+                {accuracy >= 90
+                  ? (isBn ? 'চমৎকার! আপনি ৯০%+ নির্ভুলতায় পরবর্তী লেসন আনলক করেছেন।' : 'Great accuracy! Next lesson unlocked.')
+                  : (isBn ? 'পরবর্তী লেসন আনলক করতে কমপক্ষে ৯০% নির্ভুলতা প্রয়োজন।' : 'Score at least 90% accuracy to unlock next lesson.')}
               </p>
 
               {/* Star Rating */}
-              <div className="flex justify-center gap-1.5 mb-4">
+              <div className="flex justify-center gap-1.5 mb-3.5">
                 {[1, 2, 3].map((starIndex) => {
                   const isEarned =
                     (accuracy >= 98 && starIndex <= 3) ||
                     (accuracy >= 94 && starIndex <= 2) ||
-                    (accuracy >= 85 && starIndex <= 1);
+                    (accuracy >= 90 && starIndex <= 1);
                   return (
                     <Star
                       key={starIndex}
-                      className={`w-6 h-6 ${
+                      className={`w-5 h-5 ${
                         isEarned
                           ? 'text-amber-400 fill-amber-400'
-                          : 'text-slate-200 dark:text-slate-700'
+                          : isDark
+                          ? 'text-slate-800'
+                          : 'text-slate-200'
                       }`}
                     />
                   );
@@ -452,50 +648,73 @@ export const TypingArena: React.FC<TypingArenaProps> = ({
               </div>
 
               {/* Stats */}
-              <div className="grid grid-cols-3 gap-2 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 font-mono mb-5 text-center">
+              <div className={`grid grid-cols-3 gap-2 p-2.5 rounded-xl border font-mono mb-4 text-center ${
+                isDark
+                  ? 'bg-slate-800/80 border-slate-700'
+                  : isSepia
+                  ? 'bg-[#ebdcc9] border-[#dfcdb8]'
+                  : 'bg-slate-50 border-slate-100'
+              }`}>
                 <div>
-                  <div className="text-[10px] text-slate-400 uppercase font-semibold">{isBn ? 'একুরেসি' : 'Acc'}</div>
-                  <div className={`text-base font-bold ${accuracy >= 95 ? 'text-teal-600 dark:text-teal-400' : 'text-amber-500'}`}>
+                  <div className="text-[9px] opacity-60 uppercase font-semibold">{isBn ? 'একুরেসি' : 'Acc'}</div>
+                  <div className={`text-sm font-bold ${accuracy >= 90 ? 'text-teal-600 dark:text-teal-400' : 'text-rose-500'}`}>
                     {accuracy}%
                   </div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400 uppercase font-semibold">{isBn ? 'স্পিড' : 'Speed'}</div>
-                  <div className="text-base font-bold text-slate-800 dark:text-slate-200">{liveWpm} WPM</div>
+                  <div className="text-[9px] opacity-60 uppercase font-semibold">{isBn ? 'স্পিড' : 'Speed'}</div>
+                  <div className="text-sm font-bold">{liveWpm} WPM</div>
                 </div>
                 <div>
-                  <div className="text-[10px] text-slate-400 uppercase font-semibold">{isBn ? 'পয়েন্ট' : 'XP'}</div>
-                  <div className="text-base font-bold text-purple-600">+{lesson.xpReward}</div>
+                  <div className="text-[9px] opacity-60 uppercase font-semibold">{isBn ? 'পয়েন্ট' : 'XP'}</div>
+                  <div className="text-sm font-bold text-purple-600">+{accuracy >= 90 ? lesson.xpReward : 20}</div>
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex flex-col gap-2">
-                {accuracy >= 95 && onNextLesson ? (
+                {accuracy >= 90 && onNextLesson ? (
+                  <>
+                    <button
+                      id="btn-modal-next-lesson"
+                      onClick={() => {
+                        setIsCompleted(false);
+                        onNextLesson();
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-500/20 transition-all cursor-pointer"
+                    >
+                      <span>{isBn ? 'পরবর্তী লেসন (Enter)' : 'Next Lesson (Enter)'}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      id="btn-modal-retry"
+                      onClick={() => {
+                        setIsCompleted(false);
+                        resetPractice();
+                      }}
+                      className={`w-full py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        isDark
+                          ? 'bg-slate-800 hover:bg-slate-750 border-slate-700 text-slate-200'
+                          : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>{isBn ? 'আবার অনুশীলন করুন (Esc / R)' : 'Retry Drill (Esc / R)'}</span>
+                    </button>
+                  </>
+                ) : (
                   <button
-                    id="btn-modal-next-lesson"
+                    id="btn-modal-retry"
                     onClick={() => {
                       setIsCompleted(false);
-                      onNextLesson();
+                      resetPractice();
                     }}
                     className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-semibold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-teal-500/20 transition-all cursor-pointer"
                   >
-                    <span>{isBn ? 'পরবর্তী লেসন (Enter)' : 'Next Lesson (Enter)'}</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>{isBn ? 'আবার চেষ্টা করুন (Enter)' : 'Try Again (Enter)'}</span>
                   </button>
-                ) : null}
-
-                <button
-                  id="btn-modal-retry"
-                  onClick={() => {
-                    setIsCompleted(false);
-                    resetPractice();
-                  }}
-                  className="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>{isBn ? 'আবার চেষ্টা করুন (Esc)' : 'Retry (Esc)'}</span>
-                </button>
+                )}
               </div>
             </motion.div>
           </div>

@@ -108,8 +108,8 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               <Award className="w-8 sm:w-10 h-8 sm:h-10 text-slate-950" />
             </div>
 
-            <p className="text-[11px] sm:text-xs font-mono uppercase tracking-widest text-amber-700 dark:text-amber-400 font-bold mb-1">
-              TYPEMASTER TOUCH TYPING ACADEMY
+            <p className="text-[11px] sm:text-xs font-mono uppercase tracking-widest text-teal-700 dark:text-teal-400 font-bold mb-1">
+              TYPE SHIKHO TOUCH TYPING ACADEMY
             </p>
             <h1 className="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white font-serif tracking-tight mb-2">
               {isBn ? 'সনদপত্র / Certificate of Mastery' : 'Certificate of Mastery'}
@@ -177,7 +177,7 @@ export const CertificateModal: React.FC<CertificateModalProps> = ({
               </div>
               <div className="text-right">
                 <div className="font-mono font-bold text-slate-900 dark:text-slate-200">{issueDate}</div>
-                <div className="text-[10px] text-slate-400">Issued On / ভেরিফাইড আইডি: TM-{Date.now().toString().slice(-6)}</div>
+                <div className="text-[10px] text-slate-400">Issued On / ভেরিফাইড আইডি: TS-{Date.now().toString().slice(-6)}</div>
               </div>
             </div>
           </div>

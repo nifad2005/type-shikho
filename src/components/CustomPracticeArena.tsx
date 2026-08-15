@@ -103,7 +103,7 @@ export const CustomPracticeArena: React.FC<CustomPracticeArenaProps> = ({
       {/* Header */}
       <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs">
         <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-          <FileText className="w-6 h-6 text-emerald-500" />
+          <FileText className="w-6 h-6 text-teal-500" />
           {isBn ? 'ফ্রি প্র্যাকটিস ও নিজস্ব টেক্সট মোড' : 'Free Practice & Custom Text Mode'}
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -119,10 +119,10 @@ export const CustomPracticeArena: React.FC<CustomPracticeArenaProps> = ({
           <div
             key={preset.id}
             onClick={() => handleStartPreset(preset)}
-            className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl hover:border-emerald-500 hover:shadow-md cursor-pointer transition-all flex flex-col justify-between"
+            className="p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl hover:border-teal-500 hover:shadow-md cursor-pointer transition-all flex flex-col justify-between"
           >
             <div>
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3">
+              <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-3">
                 <Code2 className="w-5 h-5" />
               </div>
               <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
@@ -133,7 +133,7 @@ export const CustomPracticeArena: React.FC<CustomPracticeArenaProps> = ({
               </p>
             </div>
 
-            <button className="mt-4 w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors">
+            <button className="mt-4 w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-teal-600 hover:text-white text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer">
               {isBn ? 'অনুশীলন শুরু করুন' : 'Start Drill'}
             </button>
           </div>
@@ -143,7 +143,7 @@ export const CustomPracticeArena: React.FC<CustomPracticeArenaProps> = ({
       {/* Custom Text Area Input */}
       <div className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xs space-y-4">
         <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <PenTool className="w-4 h-4 text-emerald-500" />
+          <PenTool className="w-4 h-4 text-teal-500" />
           {isBn ? 'আপনার নিজস্ব টেক্সট পেস্ট করুন' : 'Paste Your Own Custom Text'}
         </h3>
         <textarea
@@ -154,7 +154,7 @@ export const CustomPracticeArena: React.FC<CustomPracticeArenaProps> = ({
               ? 'এখানে আপনার ইচ্ছেমতো ইংরেজি টেক্সট, কোড বা প্যারাগ্রাফ পেস্ট করুন...'
               : 'Paste your custom English paragraph, essay, or code snippet here to practice...'
           }
-          className="w-full h-32 p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl font-mono text-sm text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500/50"
+          className="w-full h-32 p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl font-mono text-sm text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-teal-500/50"
         />
 
         <div className="flex justify-between items-center">
@@ -165,7 +165,7 @@ export const CustomPracticeArena: React.FC<CustomPracticeArenaProps> = ({
             id="btn-start-custom-text"
             onClick={handleStartCustomInput}
             disabled={!customText.trim()}
-            className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm shadow-md transition-all active:scale-95"
+            className="px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
           >
             {isBn ? 'কাস্টম টেক্সট শুরু করুন' : 'Start Custom Practice'}
           </button>

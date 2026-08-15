@@ -77,4 +77,5 @@ export interface Badge {
 
 export type SoundEffectType = 'mechanical' | 'typewriter' | 'retro' | 'gentle' | 'mute';
 export type Language = 'bn' | 'en';
+export type ThemeMode = 'light' | 'dark' | 'sepia';
 export type AppTab = 'learn' | 'game' | 'smart-practice' | 'badges' | 'certificate' | 'custom-test';

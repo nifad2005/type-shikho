@@ -119,7 +119,7 @@ export const SmartPracticeModal: React.FC<SmartPracticeModalProps> = ({
                   <p className="text-xs text-emerald-800 dark:text-emerald-300">
                     {isBn
                       ? 'দারুণ! এখনও পর্যন্ত আপনার কোনো স্থায়ী দুর্বল অক্ষর ধরা পড়েনি। অনুশীলনের পর এখানে দুর্বল অক্ষর স্বয়ংক্রিয়ভাবে জমা হবে।'
-                      : 'Excellent! No prominent weak keys detected yet. As you practice, AI will auto-detect tricky keys here.'}
+                      : 'Excellent! No prominent weak keys detected yet. As you practice, the system will auto-detect tricky keys here.'}
                   </p>
                 </div>
               )}

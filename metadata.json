@@ -1,6 +1,6 @@
 {
-  "name": "TypeMaster - শূন্য থেকে টাইপিং একাডেমি",
-  "description": "Guided touch typing mastery platform from scratch with visual hand & keyboard guidance, muscle memory modules, smart error analysis, gamified achievements, and typing games.",
+  "name": "Type Shikho",
+  "description": "Type Shikho - সহজ ও দ্রুত টাচ টাইপিং শেখার প্ল্যাটফর্ম। নির্ভুল আঙুলের নির্দেশনা, বাংলা অডিও গাইডেন্স এবং প্র্যাকটিস লেসন।",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

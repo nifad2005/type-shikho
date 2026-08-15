@@ -1,26 +1,37 @@
 import React from 'react';
-import { FingerId, KeyFingerInfo } from '../types';
+import { KeyFingerInfo, ThemeMode } from '../types';
 import { KEYBOARD_LAYOUT, FINGER_COLORS } from '../utils/keyboardMap';
 
 interface VirtualKeyboardProps {
   targetKeyInfo: KeyFingerInfo | null;
   lastPressedKey: string | null;
   isErrorKey: boolean;
+  theme?: ThemeMode;
 }
 
 export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
   targetKeyInfo,
   lastPressedKey,
   isErrorKey,
+  theme = 'light',
 }) => {
+  const isDark = theme === 'dark';
+  const isSepia = theme === 'sepia';
+
   return (
     <div
       id="virtual-keyboard"
-      className="w-full max-w-4xl mx-auto p-2 sm:p-4 bg-slate-900/90 dark:bg-slate-950/95 border border-slate-700/70 rounded-2xl shadow-xl backdrop-blur-md select-none"
+      className={`w-full max-w-3xl mx-auto p-2 rounded-2xl select-none transition-colors ${
+        isDark
+          ? 'bg-slate-900/60'
+          : isSepia
+          ? 'bg-[#f4ede0]/70'
+          : 'bg-slate-200/50'
+      }`}
     >
-      <div className="flex flex-col gap-1.5 sm:gap-2">
+      <div className="flex flex-col gap-1">
         {KEYBOARD_LAYOUT.map((row) => (
-          <div key={row.rowId} className="flex justify-center items-center gap-1 sm:gap-1.5">
+          <div key={row.rowId} className="flex justify-center items-center gap-1">
             {row.keys.map((k) => {
               const isTarget =
                 targetKeyInfo &&
@@ -41,52 +52,47 @@ export const VirtualKeyboard: React.FC<VirtualKeyboardProps> = ({
                   (lastPressedKey === ' ' && k.code === 'Space'));
 
               const fingerStyle = FINGER_COLORS[k.finger];
+              const widthClass = k.width ? k.width : 'w-7 sm:w-9 md:w-10 flex-1 max-w-[42px]';
+              const heightClass = 'h-7 sm:h-8 md:h-9';
 
-              // Base width
-              const widthClass = k.width ? k.width : 'w-7 sm:w-11 md:w-12 flex-1 max-w-[50px]';
-              const heightClass = 'h-8 sm:h-11 md:h-12';
+              let keyClasses = '';
+              if (isTarget || isShiftHighlight) {
+                keyClasses = `${fingerStyle.bg} text-white font-bold scale-[1.03] shadow-xs`;
+              } else if (isPressed) {
+                keyClasses = isErrorKey
+                  ? 'bg-rose-500 text-white animate-shake'
+                  : 'bg-teal-500 text-white scale-95';
+              } else {
+                if (isDark) {
+                  keyClasses = 'bg-slate-800 text-slate-300 hover:bg-slate-750';
+                } else if (isSepia) {
+                  keyClasses = 'bg-[#fbf7ee] text-stone-700 hover:bg-stone-100';
+                } else {
+                  keyClasses = 'bg-white text-slate-700 hover:bg-slate-50';
+                }
+              }
 
               return (
                 <div
                   key={k.code}
                   className={`
-                    relative rounded-lg font-mono text-xs sm:text-sm font-semibold flex flex-col items-center justify-center transition-all duration-100 shadow-xs
-                    ${widthClass} ${heightClass}
-                    ${
-                      isTarget || isShiftHighlight
-                        ? `${fingerStyle.bg} text-white font-bold scale-105 ring-2 sm:ring-4 ring-white/60 shadow-[0_0_15px_rgba(255,255,255,0.4)] z-10 animate-pulse`
-                        : isPressed
-                        ? isErrorKey
-                          ? 'bg-rose-600 text-white animate-shake'
-                          : 'bg-emerald-600 text-white'
-                        : 'bg-slate-800/90 hover:bg-slate-750 text-slate-300 border-b-2 border-slate-950'
-                    }
+                    relative rounded-lg font-mono text-[11px] sm:text-xs font-medium flex flex-col items-center justify-center transition-all duration-75
+                    ${widthClass} ${heightClass} ${keyClasses}
                   `}
                 >
-                  {/* Shift label if key has one */}
                   {k.shiftDisplay && (
-                    <span
-                      className={`text-[9px] sm:text-[10px] leading-none mb-0.5 ${
-                        isTarget && targetKeyInfo?.shiftRequired ? 'font-black text-amber-300' : 'text-slate-400'
-                      }`}
-                    >
+                    <span className="text-[8px] opacity-40 leading-none mb-0.5">
                       {k.shiftDisplay}
                     </span>
                   )}
-
-                  {/* Main Key Display */}
                   <span className="leading-none">{k.display}</span>
 
-                  {/* Finger colored dot indicator at the bottom edge */}
-                  {!isTarget && !isShiftHighlight && (
-                    <span
-                      className={`absolute bottom-1 w-1.5 h-1.5 rounded-full opacity-60 ${fingerStyle.bg}`}
-                    />
-                  )}
-
-                  {/* Tactile bump marker for F and J keys */}
                   {(k.key === 'f' || k.key === 'j') && (
-                    <div className="absolute bottom-1 w-3 sm:w-4 h-0.5 rounded-full bg-slate-300 dark:bg-slate-400 opacity-80" />
+                    <div
+                      className={`absolute bottom-0.5 w-2 h-0.5 rounded-full opacity-60 ${
+                        isTarget || isPressed ? 'bg-white' : 'bg-current'
+                      }`}
+                    />
                   )}
                 </div>
               );

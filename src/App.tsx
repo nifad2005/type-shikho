@@ -8,7 +8,8 @@ import {
   Language, 
   SoundEffectType, 
   UserStats, 
-  Lesson 
+  Lesson,
+  ThemeMode
 } from './types';
 import { MODULES_DATA } from './utils/keyboardMap';
 import { Header } from './components/Header';
@@ -18,7 +19,8 @@ import { CustomPracticeArena } from './components/CustomPracticeArena';
 import { SmartPracticeModal } from './components/SmartPracticeModal';
 import { CertificateModal } from './components/CertificateModal';
 import { OnboardingModal } from './components/OnboardingModal';
-import { X, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import { stopSpeaking, preloadLessonAudio } from './utils/speech';
 
 const STORAGE_KEY = 'typemaster_user_data_v1';
 
@@ -39,13 +41,23 @@ const INITIAL_USER_STATS: UserStats = {
 };
 
 export default function App() {
-  // Language & Sound settings
+  // Theme setting (light / dark / sepia) - Defaulting to modern pristine light
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    return (localStorage.getItem('typemaster_theme') as ThemeMode) || 'light';
+  });
+
+  // Language & Sound & Voice settings
   const [language, setLanguage] = useState<Language>(() => {
     return (localStorage.getItem('typemaster_lang') as Language) || 'bn';
   });
 
   const [soundType, setSoundType] = useState<SoundEffectType>(() => {
     return (localStorage.getItem('typemaster_sound') as SoundEffectType) || 'mechanical';
+  });
+
+  const [voiceEnabled, setVoiceEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('typemaster_voice_enabled');
+    return saved === null ? true : saved === 'true';
   });
 
   // User stats from localStorage
@@ -78,7 +90,16 @@ export default function App() {
     return MODULES_DATA.flatMap((m) => m.lessons);
   }, []);
 
-  // Active Lesson (Defaults to the first uncompleted lesson, or Module 1 Lesson 1)
+  // Helper to check if a specific lesson is unlocked
+  const isLessonUnlocked = useCallback((lessonId: string): boolean => {
+    const index = allLessons.findIndex((l) => l.id === lessonId);
+    if (index <= 0) return true; // first lesson is always unlocked
+    const prevLesson = allLessons[index - 1];
+    const prevRecord = userStats.completedLessons[prevLesson.id];
+    return !!prevRecord && (prevRecord.accuracy >= 90 || prevRecord.stars >= 1);
+  }, [allLessons, userStats.completedLessons]);
+
+  // Active Lesson (Ensure unlocked)
   const [activeLesson, setActiveLesson] = useState<Lesson>(() => {
     const savedLessonId = localStorage.getItem('typemaster_active_lesson_id');
     if (savedLessonId) {
@@ -97,6 +118,15 @@ export default function App() {
 
   // Sync to localStorage
   useEffect(() => {
+    localStorage.setItem('typemaster_theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(userStats));
   }, [userStats]);
 
@@ -109,35 +139,40 @@ export default function App() {
   }, [soundType]);
 
   useEffect(() => {
+    localStorage.setItem('typemaster_voice_enabled', voiceEnabled.toString());
+  }, [voiceEnabled]);
+
+  useEffect(() => {
     if (activeLesson) {
       localStorage.setItem('typemaster_active_lesson_id', activeLesson.id);
     }
   }, [activeLesson]);
 
-  // First time visitor onboarding
+  // First time visitor voice pre-warming
   useEffect(() => {
-    const hasSeenOnboarding = localStorage.getItem('typemaster_onboarding_seen');
-    if (!hasSeenOnboarding) {
-      setIsOnboardingOpen(true);
-      localStorage.setItem('typemaster_onboarding_seen', 'true');
-    }
-  }, []);
+    // Pre-buffer first lessons so speech starts with zero delay
+    MODULES_DATA[0].lessons.slice(0, 5).forEach((l) => preloadLessonAudio(l, language));
+  }, [language]);
 
   // Navigation helpers
   const currentLessonIndex = allLessons.findIndex((l) => l.id === activeLesson.id);
   const hasPrevLesson = currentLessonIndex > 0;
   const hasNextLesson = currentLessonIndex !== -1 && currentLessonIndex < allLessons.length - 1;
+  const nextLesson = hasNextLesson ? allLessons[currentLessonIndex + 1] : null;
+  const isNextLessonUnlocked = nextLesson ? isLessonUnlocked(nextLesson.id) : false;
 
   const handlePrevLesson = () => {
     if (hasPrevLesson) {
+      stopSpeaking();
       setActiveLesson(allLessons[currentLessonIndex - 1]);
     }
   };
 
   const handleNextLesson = () => {
-    if (hasNextLesson) {
-      setActiveLesson(allLessons[currentLessonIndex + 1]);
-    } else {
+    if (hasNextLesson && nextLesson && isLessonUnlocked(nextLesson.id)) {
+      stopSpeaking();
+      setActiveLesson(nextLesson);
+    } else if (!hasNextLesson) {
       setIsCertificateOpen(true);
     }
   };
@@ -151,17 +186,22 @@ export default function App() {
     mistakes: Record<string, number>;
   }) => {
     setUserStats((prev) => {
+      const isPassed = result.accuracy >= 90 || result.stars >= 1;
+      const prevRecord = prev.completedLessons[result.lessonId];
+
       const updatedCompleted = {
         ...prev.completedLessons,
-        [result.lessonId]: {
-          stars: Math.max(result.stars, prev.completedLessons[result.lessonId]?.stars || 0),
-          accuracy: Math.max(result.accuracy, prev.completedLessons[result.lessonId]?.accuracy || 0),
-          wpm: Math.max(result.wpm, prev.completedLessons[result.lessonId]?.wpm || 0),
-          completedAt: new Date().toISOString(),
-        },
+        ...(isPassed ? {
+          [result.lessonId]: {
+            stars: Math.max(result.stars, prevRecord?.stars || 0),
+            accuracy: Math.max(result.accuracy, prevRecord?.accuracy || 0),
+            wpm: Math.max(result.wpm, prevRecord?.wpm || 0),
+            completedAt: new Date().toISOString(),
+          }
+        } : {}),
       };
 
-      const xpEarned = (result.stars * 40) + (result.accuracy >= 98 ? 30 : 15);
+      const xpEarned = isPassed ? (result.stars * 40) + (result.accuracy >= 98 ? 30 : 15) : 10;
       const newXp = prev.xp + xpEarned;
       const newLevel = Math.floor(newXp / 250) + 1;
 
@@ -185,10 +225,25 @@ export default function App() {
     setSoundType((prev) => (prev === 'mute' ? 'mechanical' : 'mute'));
   };
 
+  const toggleVoice = () => {
+    setVoiceEnabled((prev) => {
+      if (prev) {
+        stopSpeaking();
+      }
+      return !prev;
+    });
+  };
+
   const isBn = language === 'bn';
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-teal-500 selection:text-white">
+    <div className={`min-h-screen flex flex-col font-sans selection:bg-teal-500 selection:text-white transition-colors duration-200 ${
+      theme === 'dark'
+        ? 'bg-slate-950 text-slate-100 dark'
+        : theme === 'sepia'
+        ? 'bg-[#fbf7ee] text-stone-800'
+        : 'bg-slate-50 text-slate-900'
+    }`}>
       {/* Clean Minimal Header */}
       <Header
         currentLesson={activeLesson}
@@ -196,6 +251,10 @@ export default function App() {
         onLanguageChange={setLanguage}
         soundType={soundType}
         onToggleSound={toggleSound}
+        voiceEnabled={voiceEnabled}
+        onToggleVoice={toggleVoice}
+        theme={theme}
+        onThemeChange={setTheme}
         userStats={userStats}
         onOpenCurriculum={() => setIsCurriculumOpen(true)}
         onOpenCustomPractice={() => setIsCustomPracticeOpen(true)}
@@ -205,10 +264,11 @@ export default function App() {
         onNextLesson={handleNextLesson}
         hasPrevLesson={hasPrevLesson}
         hasNextLesson={hasNextLesson}
+        isNextLessonUnlocked={isNextLessonUnlocked}
       />
 
       {/* Main Centered Studio */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col justify-center">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-6 flex flex-col justify-center">
         {isCustomPracticeOpen ? (
           <div className="w-full flex flex-col gap-4">
             <button
@@ -230,7 +290,11 @@ export default function App() {
             lesson={activeLesson}
             language={language}
             soundType={soundType}
+            voiceEnabled={voiceEnabled}
+            onToggleVoice={toggleVoice}
             userStats={userStats}
+            theme={theme}
+            isNextLessonUnlocked={isNextLessonUnlocked}
             onLessonComplete={handleLessonComplete}
             onNextLesson={handleNextLesson}
             onSelectAnotherLesson={() => setIsCurriculumOpen(true)}
@@ -245,6 +309,7 @@ export default function App() {
           language={language}
           currentLessonId={activeLesson.id}
           onSelectLesson={(lesson) => {
+            stopSpeaking();
             setActiveLesson(lesson);
             setIsCustomPracticeOpen(false);
           }}
@@ -259,6 +324,7 @@ export default function App() {
         userStats={userStats}
         language={language}
         onStartCustomDrill={(customLesson) => {
+          stopSpeaking();
           setActiveLesson(customLesson);
           setIsCustomPracticeOpen(false);
           setIsSmartModalOpen(false);

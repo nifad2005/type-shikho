@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Language } from '../types';
+import { BrandLogo } from './BrandLogo';
 import { Sparkles, CheckCircle2, ChevronRight, Keyboard, ArrowRight, ShieldCheck, Heart } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -33,12 +34,10 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           {/* Header */}
           <div className="flex justify-between items-center pb-4 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
-                <Keyboard className="w-5 h-5" />
-              </div>
+              <BrandLogo size={36} />
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  {isBn ? 'স্বাগতম টাইপিং একাডেমিতে!' : 'Welcome to TypeMaster!'}
+                  {isBn ? 'স্বাগতম Type Shikho একাডেমিতে!' : 'Welcome to Type Shikho!'}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {isBn ? 'একদম শূন্য থেকে সঠিক পদ্ধতিতে টাইপিং শিখুন' : 'Guided touch typing from scratch'}

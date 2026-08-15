@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Language, SoundEffectType, UserStats, Lesson } from '../types';
+import { Language, SoundEffectType, UserStats, Lesson, ThemeMode } from '../types';
+import { BrandLogo } from './BrandLogo';
 import { 
-  Keyboard, 
   Volume2, 
   VolumeX, 
   Globe, 
@@ -9,13 +9,16 @@ import {
   Award, 
   BrainCircuit, 
   FileText, 
-  RotateCcw,
   ChevronLeft,
   ChevronRight,
   Menu,
   X,
-  Sparkles,
-  Gamepad2
+  Lock,
+  Headphones,
+  MicOff,
+  Sun,
+  Moon,
+  Sparkles
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -24,6 +27,10 @@ interface HeaderProps {
   onLanguageChange: (lang: Language) => void;
   soundType: SoundEffectType;
   onToggleSound: () => void;
+  voiceEnabled: boolean;
+  onToggleVoice: () => void;
+  theme: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
   userStats: UserStats;
   onOpenCurriculum: () => void;
   onOpenCustomPractice: () => void;
@@ -33,6 +40,7 @@ interface HeaderProps {
   onNextLesson: () => void;
   hasPrevLesson: boolean;
   hasNextLesson: boolean;
+  isNextLessonUnlocked: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -41,6 +49,10 @@ export const Header: React.FC<HeaderProps> = ({
   onLanguageChange,
   soundType,
   onToggleSound,
+  voiceEnabled,
+  onToggleVoice,
+  theme,
+  onThemeChange,
   userStats,
   onOpenCurriculum,
   onOpenCustomPractice,
@@ -50,38 +62,49 @@ export const Header: React.FC<HeaderProps> = ({
   onNextLesson,
   hasPrevLesson,
   hasNextLesson,
+  isNextLessonUnlocked,
 }) => {
   const isBn = language === 'bn';
+  const isDark = theme === 'dark';
+  const isSepia = theme === 'sepia';
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
+  const cycleTheme = () => {
+    if (theme === 'light') onThemeChange('dark');
+    else if (theme === 'dark') onThemeChange('sepia');
+    else onThemeChange('light');
+  };
+
   return (
-    <header className="w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40">
-      <div className="max-w-5xl mx-auto px-4 py-2.5 flex items-center justify-between gap-2">
-        {/* Left: Clean Brand */}
+    <header className={`w-full transition-colors z-40 ${
+      isDark
+        ? 'bg-slate-950 text-slate-200'
+        : isSepia
+        ? 'bg-[#fbf7ee] text-stone-800'
+        : 'bg-slate-50 text-slate-800'
+    }`}>
+      <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        {/* Brand */}
         <div 
           onClick={onOpenCurriculum}
-          className="flex items-center gap-2 cursor-pointer select-none group"
-          title={isBn ? 'পাঠ্যক্রম ম্যাপ দেখুন' : 'View Curriculum'}
+          className="flex items-center gap-2 cursor-pointer select-none opacity-85 hover:opacity-100 transition-opacity"
+          title="Type Shikho"
         >
-          <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs group-hover:bg-teal-500 transition-colors">
-            <Keyboard className="w-4 h-4" />
-          </div>
-          <div>
-            <span className="font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
-              TypeMaster
-            </span>
-          </div>
+          <BrandLogo size={24} />
+          <span className="font-bold text-sm tracking-tight">
+            Type Shikho
+          </span>
         </div>
 
-        {/* Center: Minimalist Lesson Navigator */}
+        {/* Center: Minimal Lesson Switcher */}
         {currentLesson && (
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/90 p-1 rounded-xl">
+          <div className="flex items-center gap-1">
             <button
               id="nav-prev-lesson"
               onClick={onPrevLesson}
               disabled={!hasPrevLesson}
-              title={isBn ? 'পূর্ববর্তী লেসন' : 'Previous Lesson'}
-              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent transition-all cursor-pointer"
+              title={isBn ? 'পূর্ববর্তী' : 'Previous'}
+              className="p-1 rounded-md opacity-50 hover:opacity-100 disabled:opacity-20 transition-all cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -89,112 +112,132 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               id="btn-current-lesson-dropdown"
               onClick={onOpenCurriculum}
-              className="px-2.5 py-1 text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-teal-600 dark:hover:text-teal-400 flex items-center gap-1.5 transition-colors cursor-pointer max-w-[200px] sm:max-w-[280px] truncate"
+              className="px-2 py-0.5 text-xs font-mono font-medium hover:text-teal-500 transition-colors cursor-pointer truncate max-w-[180px] sm:max-w-[260px]"
             >
-              {currentLesson.type === 'game' ? (
-                <Gamepad2 className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              ) : (
-                <BookOpen className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-              )}
-              <span className="truncate">
-                {isBn ? currentLesson.titleBn : currentLesson.titleEn}
-              </span>
+              {isBn ? currentLesson.titleBn : currentLesson.titleEn}
             </button>
 
             <button
               id="nav-next-lesson"
-              onClick={onNextLesson}
-              disabled={!hasNextLesson}
-              title={isBn ? 'পরবর্তী লেসন' : 'Next Lesson'}
-              className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent transition-all cursor-pointer"
+              onClick={() => {
+                if (isNextLessonUnlocked) onNextLesson();
+              }}
+              disabled={!hasNextLesson || !isNextLessonUnlocked}
+              title={isBn ? 'পরবর্তী' : 'Next'}
+              className={`p-1 rounded-md transition-all ${
+                !isNextLessonUnlocked || !hasNextLesson
+                  ? 'opacity-25 cursor-not-allowed'
+                  : 'opacity-50 hover:opacity-100 cursor-pointer'
+              }`}
             >
-              <ChevronRight className="w-4 h-4" />
+              {!isNextLessonUnlocked && hasNextLesson ? (
+                <Lock className="w-3.5 h-3.5 text-amber-500" />
+              ) : (
+                <ChevronRight className="w-4 h-4" />
+              )}
             </button>
           </div>
         )}
 
-        {/* Right: Quick Controls */}
-        <div className="flex items-center gap-1.5">
-          {/* Sound Toggle (1 click) */}
+        {/* Right: Minimal Icon Controls */}
+        <div className="flex items-center gap-1 text-slate-400 dark:text-slate-400">
+          {/* Theme */}
+          <button
+            id="btn-theme-toggle"
+            onClick={cycleTheme}
+            title={isBn ? 'থিম পরিবর্তন' : 'Theme'}
+            className="p-1.5 rounded-lg hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+          >
+            {theme === 'light' && <Sun className="w-4 h-4" />}
+            {theme === 'dark' && <Moon className="w-4 h-4 text-blue-400" />}
+            {theme === 'sepia' && <Sparkles className="w-4 h-4 text-amber-600" />}
+          </button>
+
+          {/* Voice Audio Guide */}
+          <button
+            id="btn-voice-toggle"
+            onClick={onToggleVoice}
+            title={voiceEnabled ? (isBn ? 'ভয়েস বন্ধ' : 'Voice Off') : (isBn ? 'ভয়েস চালু' : 'Voice On')}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              voiceEnabled ? 'text-teal-600 dark:text-teal-400' : 'opacity-40 hover:opacity-80'
+            }`}
+          >
+            {voiceEnabled ? <Headphones className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+          </button>
+
+          {/* Key Sounds */}
           <button
             id="btn-sound-toggle"
             onClick={onToggleSound}
-            title={soundType === 'mute' ? (isBn ? 'সাউন্ড অন করুন' : 'Unmute') : (isBn ? 'সাউন্ড মিউট করুন' : 'Mute')}
-            className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            title={soundType === 'mute' ? (isBn ? 'সাউন্ড চালু' : 'Sound On') : (isBn ? 'সাউন্ড বন্ধ' : 'Sound Off')}
+            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+              soundType !== 'mute' ? 'text-teal-600 dark:text-teal-400' : 'opacity-40 hover:opacity-80'
+            }`}
           >
-            {soundType === 'mute' ? (
-              <VolumeX className="w-4 h-4 text-slate-400" />
-            ) : (
-              <Volume2 className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-            )}
+            {soundType === 'mute' ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
           </button>
 
           {/* Language Switch */}
           <button
             id="btn-lang-toggle"
             onClick={() => onLanguageChange(language === 'bn' ? 'en' : 'bn')}
-            className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1 transition-colors cursor-pointer"
-            title="বাংলা / English"
+            className="px-1.5 py-1 text-xs font-mono font-bold hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+            title="Language"
           >
-            <Globe className="w-3.5 h-3.5 text-slate-400" />
-            <span>{language === 'bn' ? 'EN' : 'বাং'}</span>
+            {language === 'bn' ? 'EN' : 'বাং'}
           </button>
 
-          {/* All Lessons Curriculum Roadmap Button */}
-          <button
-            id="btn-open-curriculum"
-            onClick={onOpenCurriculum}
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 hover:bg-teal-100 text-xs font-bold transition-all cursor-pointer"
-          >
-            <BookOpen className="w-3.5 h-3.5" />
-            <span>{isBn ? 'সকল লেসন' : 'Curriculum'}</span>
-          </button>
-
-          {/* Extra Options Menu (Dropdown) */}
+          {/* More menu */}
           <div className="relative">
             <button
               id="btn-more-options"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-              title={isBn ? 'অতিরিক্ত অপশন' : 'More Options'}
+              className="p-1.5 rounded-lg hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+              title="Menu"
             >
               {isMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
             </button>
 
             {isMenuOpen && (
               <div 
-                className="absolute right-0 top-full mt-2 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl p-1.5 z-50 flex flex-col gap-1 text-xs font-semibold"
+                className={`absolute right-0 top-full mt-1.5 w-48 rounded-xl shadow-lg p-1 z-50 flex flex-col gap-0.5 text-xs font-medium border ${
+                  isDark
+                    ? 'bg-slate-900 border-slate-800 text-slate-200'
+                    : isSepia
+                    ? 'bg-[#f4ede0] border-[#dfcdb8] text-stone-800'
+                    : 'bg-white border-slate-200 text-slate-700'
+                }`}
                 onClick={() => setIsMenuOpen(false)}
               >
                 <button
                   onClick={onOpenCurriculum}
-                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  className="w-full px-2.5 py-1.5 rounded-lg text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <BookOpen className="w-4 h-4 text-teal-600" />
-                  <span>{isBn ? 'লেসন পাঠ্যক্রম' : 'Lesson Curriculum'}</span>
+                  <BookOpen className="w-3.5 h-3.5 text-teal-600" />
+                  <span>{isBn ? 'পাঠ্যক্রম' : 'Curriculum'}</span>
                 </button>
 
                 <button
                   onClick={onOpenCustomPractice}
-                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  className="w-full px-2.5 py-1.5 rounded-lg text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <FileText className="w-4 h-4 text-blue-600" />
-                  <span>{isBn ? 'ফ্রি প্র্যাকটিস' : 'Free Practice'}</span>
+                  <FileText className="w-3.5 h-3.5 text-blue-500" />
+                  <span>{isBn ? 'ফ্রি প্র্যাকটিস' : 'Custom'}</span>
                 </button>
 
                 <button
                   onClick={onOpenSmartDrill}
-                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  className="w-full px-2.5 py-1.5 rounded-lg text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <BrainCircuit className="w-4 h-4 text-purple-600" />
-                  <span>{isBn ? 'দুর্বল কি অ্যানালাইজার' : 'Weak Key Analyzer'}</span>
+                  <BrainCircuit className="w-3.5 h-3.5 text-purple-500" />
+                  <span>{isBn ? 'অ্যানালাইজার' : 'Weak Keys'}</span>
                 </button>
 
                 <button
                   onClick={onOpenCertificate}
-                  className="w-full px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  className="w-full px-2.5 py-1.5 rounded-lg text-left hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-2 transition-colors cursor-pointer"
                 >
-                  <Award className="w-4 h-4 text-amber-500" />
+                  <Award className="w-3.5 h-3.5 text-amber-500" />
                   <span>{isBn ? 'সার্টিফিকেট' : 'Certificate'}</span>
                 </button>
               </div>
